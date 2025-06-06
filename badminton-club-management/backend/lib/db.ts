@@ -1,10 +1,20 @@
-import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI!;
 
-if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI environment variable');
+
+import { MongoClient } from "mongodb";
+
+const uri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017";
+const options = {};
+
+let client: MongoClient;
+let clientPromise: Promise<MongoClient>;
+
+if (!global._mongoClientPromise) {
+  client = new MongoClient(uri, options);
+  global._mongoClientPromise = client.connect();
 }
+
+clientPromise = global._mongoClientPromise;
 
 let cached = global.mongoose;
 
@@ -26,4 +36,4 @@ async function dbConnect() {
   return cached.conn;
 }
 
-export default dbConnect;
+export default clientPromise;

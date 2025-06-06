@@ -2,10 +2,16 @@
 const colors = require('tailwindcss/colors');
 
 module.exports = {
-  content: ["./app/**/*.{js,ts,jsx,tsx}"],
+  content: [
+  "./app/**/*.{js,ts,jsx,tsx}",
+  "./pages/**/*.{js,ts,jsx,tsx}",
+  "./components/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
       colors: {
+
+        darkBlue: '#0A1F44',
+        midBlue: '#1B2A52',
         // Dark Blue (custom)
         'dark-blue': {
           DEFAULT: '#1E3A8A',  // Base color

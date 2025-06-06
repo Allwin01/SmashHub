@@ -1,3 +1,40 @@
+// app/layout.tsx
+import '../styles/globals.css';
+import { ReactNode } from "react";
+import TransitionOverlay from "@/components/TransitionOverlay"; // we create this next
+
+export const metadata = {
+  title: "SmashHub",
+  description: "Badminton club management platform",
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <TransitionOverlay />
+        {children}
+      </body>
+    </html>
+  );
+}
+
+/* 
+// app/layout.tsx (Server Component)
+import RemoveExtensionAttributes from './RemoveExtensionAttributes';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <RemoveExtensionAttributes /> {/* 👈 Client-side logic */
+ /*     {children}
+      </body>
+    </html>
+  );
+}
+
+
 /*
 
 // app/layout.tsx
@@ -52,18 +89,8 @@ export default function RootLayout({ children }) {
   );
 }
 
+
+
+
+
 */
-
-// app/layout.tsx (Server Component)
-import RemoveExtensionAttributes from './RemoveExtensionAttributes';
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body>
-        <RemoveExtensionAttributes /> {/* 👈 Client-side logic */}
-        {children}
-      </body>
-    </html>
-  );
-}

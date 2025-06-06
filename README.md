@@ -80,6 +80,11 @@ brew tap mongodb/brew
 brew install mongodb-community@7.0
 brew services start mongodb-community@7.0  */
 
+/*  To install tailwind CSS :
+npm install -D tailwindcss@3.4.1 postcss autoprefixer
+npx tailwindcss init -p
+
+
 npm install    ( install depedencied) 
 npm run dev    (Run the Development Server)
 
