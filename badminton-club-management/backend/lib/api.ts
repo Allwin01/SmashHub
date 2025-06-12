@@ -1,5 +1,5 @@
 export const login = async (credentials: { username: string; password: string }) => {
-  const res = await fetch('http://localhost:3001/api/auth/login', {
+  const res = await fetch('http://localhost:5050/api/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(credentials)
@@ -12,7 +12,7 @@ export const signup = async (userData: {
   password: string;
   role: string;
 }) => {
-  const res = await fetch('http://localhost:3001/api/auth/signup', {
+  const res = await fetch('http://localhost:5050/api/signup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(userData)

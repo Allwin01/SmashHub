@@ -84,6 +84,30 @@ brew services start mongodb-community@7.0  */
 npm install -D tailwindcss@3.4.1 postcss autoprefixer
 npx tailwindcss init -p
 
+npm install express@4.18.2 @types/express@4.17.17   
+
+npm install mongoose@7.6.5 @types/mongoose@5.11.97  # Database
+npm install bcrypt@5.1.1 @types/bcrypt@5.0.1        # Password hashing
+npm install jsonwebtoken@9.0.2 @types/jsonwebtoken@9.0.3  # Auth tokens
+npm install cors@2.8.5 @types/cors@2.8.13           # CORS middleware
+
+// - for Typescript 
+npx tsc --init
+
+npm install -g nodemon
+npm install --save-dev ts-node typescript
+
+
+// - to close the window
+npm install lucide-react
+yarn add lucide-react
+
+
+npm install cors //  for CORS ( Cross-Orgin Resource Sharing) in Express backend  as backend and frontend are in different ports 5000 /3000
+
+npm install bcrypt  // to encryp password
+npm install mongoose bcrypt jsonwebtoken @types/bcrypt @types/jsonwebtoken  -  for password encryption  and session token 
+
 
 npm install    ( install depedencied) 
 npm run dev    (Run the Development Server)
@@ -108,3 +132,25 @@ npm start	    - Run production server
 npm install	    - Install all dependencies
 
 
+Test Backend 
+*** Signup API
+curl -i -X OPTIONS http://localhost:5000/api/auth/signup \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: POST"
+
+if 403 - Forbidden
+sudo lsof -i :5000  // to check which service running on the port
+**Login - API *****
+curl -X POST http://localhost:5050/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"your@email.com", "password":"yourpassword"}'
+
+
+
+Query Mongo DB
+
+// Find users in your badmintonDB
+db.users.find({email: "user@example.com"})
+
+// Or if you need to authenticate
+db.auth("username", "password")

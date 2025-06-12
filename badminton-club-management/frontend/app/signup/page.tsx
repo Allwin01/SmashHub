@@ -1,172 +1,166 @@
 'use client';
-import Link from "next/link";
 
-//import '../styles/globals.css';
-import Image from "next/image";
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
 
-export default function SignupPage() {
+export default function SignupOverlay() {
   const router = useRouter();
 
-  const initialFormState = {
-    firstName: "",
-    surname: "",
-    sex: "",
-    email: "",
-    address: "",
-    username: "",
-    password: ""
-  };
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    address1: '',
+    address2: '',
+    postcode: '',
+    county: '',
+    country: '',
+    role: '',
+    clubName: '',
+    clubCity: '',
+    clubAddress: '',
+    selectedClub: ''
+  });
 
-  const [formData, setFormData] = useState(() => ({ ...initialFormState }));
-  const [message, setMessage] = useState("");
-  const [errors, setErrors] = useState({});
+  const [clubOptions, setClubOptions] = useState<string[]>([]);
+  const [selectedClub, setSelectedClub] = useState('');
+  const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const validate = () => {
-    const newErrors: any = {};
-    if (!formData.firstName.trim()) newErrors.firstName = "First Name is required";
-    if (!formData.surname.trim()) newErrors.surname = "Surname is required";
-    if (!formData.sex) newErrors.sex = "Sex is required";
-    if (!formData.email.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email)) newErrors.email = "Valid email is required";
-    if (!formData.address.trim()) newErrors.address = "Address is required";
-    if (!formData.password || formData.password.length < 6) newErrors.password = "Password must be at least 6 characters";
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  const roles = ['Club Admin', 'Parents', 'Tournament Organiser', 'Independent Coach'];
+
+
+  useEffect(() => {
+  const fetchClubs = async () => {
+  try {
+  const res = await fetch('http://localhost:5050/api/clubs');
+  const data = await res.json();
+  setClubOptions(data.clubs || []);
+  } catch (err) {
+  console.error('Error loading clubs:', err);
+  setClubOptions([]);
+  }
   };
+  
+  if (formData.role === 'Parents') {
+  fetchClubs();
+  } else {
+  setClubOptions([]);
+  }
+  }, [formData.role]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => {
-      const updated = {
-        ...prev,
-        [name]: value
-      };
-      if (name === "email") {
-        updated.username = value;
-      }
-      return updated;
-    });
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,  
+      ...(name === 'email' ? { username: value } : {})
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!validate()) return;
+    setIsSubmitting(true);
+    setMessage('');
+
     try {
-      const res = await fetch("/api/signup", {
-        method: "POST",
+      const res = await fetch('http://localhost:5050/api/auth/signup', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json"
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(formData),
       });
 
+      const result = await res.json();
+
       if (res.ok) {
-        setMessage("Signup successful!");
+        setMessage('✅ Registration successful! Redirecting to login...');
+        setTimeout(() => {
+          router.push('/');  // assuming your login is at `/`
+        }, 3000);
       } else {
-        const error = await res.json();
-        setMessage(error.message || "Signup failed.");
+        setMessage(`❌ ${result.message || 'Signup failed'}`);
       }
-    } catch (err) {
-      console.error(err);
-      setMessage("An error occurred.");
+    } catch (error) {
+      console.error(error);
+      setMessage('❌ Server error, please try again later.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  const handleCancel = () => {
+    router.push('/');
+  };
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-gray-100 to-slate-200 flex items-center justify-center p-6">
-      <div className="bg-white p-8 rounded shadow-md w-full max-w-lg">
-        <h2 className="text-2xl font-bold mb-6 text-center">Create Your Account</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <input
-              name="firstName"
-              placeholder="First Name"
-              value={formData.firstName}
-              onChange={handleChange}
-              className="w-full p-2 border rounded"
-            />
-            {errors.firstName && <p className="text-red-500 text-sm">{errors.firstName}</p>}
+    <div className="min-h-screen bg-cover bg-center bg-no-repeat flex items-center justify-center" style={{ backgroundImage: "url('/court-bg.jpg')" }}>
+      <div className="bg-white bg-opacity-90 rounded-xl p-6 shadow-xl w-full max-w-xl relative">
+        <button
+          onClick={handleCancel}
+          className="absolute top-3 right-3 text-gray-500 hover:text-black text-xl font-bold"
+          aria-label="Close"
+        >
+          ×
+        </button>
+        <h2 className="text-2xl font-bold mb-4 text-center">Create Your Account</h2>
+        <form className="space-y-4 text-gray-800" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-2 gap-4">
+            <input name="firstName" value={formData.firstName} onChange={handleChange} placeholder="First Name" className="border p-2 rounded text-gray-900" required />
+            <input name="lastName" value={formData.lastName} onChange={handleChange} placeholder="Last Name" className="border p-2 rounded text-gray-900" required />
           </div>
-          <div>
-            <input
-              name="surname"
-              placeholder="Surname"
-              value={formData.surname}
-              onChange={handleChange}
-              className="w-full p-2 border rounded"
-            />
-            {errors.surname && <p className="text-red-500 text-sm">{errors.surname}</p>}
+          <input name="email" type="email" value={formData.email} onChange={handleChange} placeholder="Email Address" className="w-full border p-2 rounded text-gray-900" required />
+    
+          <input name="password" type="password" value={formData.password} onChange={handleChange} placeholder="Password" className="w-full border p-2 rounded text-gray-900" required />
+
+          <div className="space-y-2">
+            <input name="address1" value={formData.address1} onChange={handleChange} placeholder="Address Line 1" className="w-full border p-2 rounded text-gray-900" required />
+            <input name="address2" value={formData.address2} onChange={handleChange} placeholder="Address Line 2" className="w-full border p-2 rounded text-gray-900" />
+            <div className="grid grid-cols-3 gap-2">
+              <input name="postcode" value={formData.postcode} onChange={handleChange} placeholder="Postcode" className="border p-2 rounded text-gray-900" required />
+              <input name="county" value={formData.county} onChange={handleChange} placeholder="County" className="border p-2 rounded text-gray-900" required />
+              <input name="country" value={formData.country} onChange={handleChange} placeholder="Country" className="border p-2 rounded text-gray-900" required />
+            </div>
           </div>
-          <div>
-            <select
-              name="sex"
-              value={formData.sex}
-              onChange={handleChange}
-              className="w-full p-2 border rounded"
-            >
-              <option value="">Select Sex</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Other">Other</option>
+
+          <select name="role" value={formData.role} onChange={handleChange} className="w-full border p-2 rounded text-gray-900" required>
+            <option value="">Select Role</option>
+            {roles.map((role) => (
+              <option key={role} value={role}>{role}</option>
+            ))}
+          </select>
+
+          {(formData.role === 'Club Admin' || formData.role === 'Independent Coach') && (
+            <div className="space-y-2">
+              <input name="clubName" value={formData.clubName} onChange={handleChange} placeholder="Club Name" className="w-full border p-2 rounded text-gray-900" required />
+              <input name="clubAddress" value={formData.clubAddress} onChange={handleChange} placeholder="Club Address" className="w-full border p-2 rounded text-gray-900" required />
+              <input name="clubCity" value={formData.clubCity} onChange={handleChange} placeholder="Club City" className="w-full border p-2 rounded text-gray-900" required />
+            </div>
+          )}
+
+          {formData.role === 'Parents' && (
+            <div> <label htmlFor="selectedClub">Select Club</label> 
+            <select id="selectedClub" value={selectedClub} onChange={(e) => setSelectedClub(e.target.value)} className="w-full px-3 py-2 rounded border" required > 
+            <option value="">-- Select a Club --</option> {clubOptions.map((club) => ( <option key={club} value={club}> {club} </option> ))} 
             </select>
-            {errors.sex && <p className="text-red-500 text-sm">{errors.sex}</p>}
+             </div> 
+             )}
+
+          
+
+          <div className="flex gap-4">
+            <button type="button" onClick={handleCancel} className="w-1/2 py-2 border rounded hover:bg-gray-100">Cancel</button>
+            <button type="submit" className="w-1/2 bg-blue-600 text-white py-2 rounded hover:bg-blue-700" disabled={isSubmitting}>
+              {isSubmitting ? 'Submitting...' : 'Submit'}
+            </button>
           </div>
-          <div>
-            <input
-              name="email"
-              type="email"
-              placeholder="Email Address"
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full p-2 border rounded"
-            />
-            {errors.email && <p className="text-red-500 text-sm">{errors.email}</p>}
-          </div>
-          <div>
-            <input
-              name="address"
-              placeholder="Address"
-              value={formData.address}
-              onChange={handleChange}
-              className="w-full p-2 border rounded"
-            />
-            {errors.address && <p className="text-red-500 text-sm">{errors.address}</p>}
-          </div>
-          <input
-            name="username"
-            placeholder="Username (auto-filled)"
-            value={formData.username}
-            className="w-full p-2 border rounded bg-gray-100"
-            disabled
-          />
-          <div>
-            <input
-              name="password"
-              type="password"
-              placeholder="Password"
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full p-2 border rounded"
-            />
-            {errors.password && <p className="text-red-500 text-sm">{errors.password}</p>}
-          </div>
-          <button
-            type="submit"
-            className="w-full py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
-          >
-            Sign Up
-          </button>
         </form>
-        {message && (
-          <div className="mt-4 text-center">
-            <p className="text-sm text-green-600">{message}</p>
-            <a href="/" className="text-blue-500 underline mt-2 inline-block">Go to Home</a>
-          </div>
-        )}
+        {message && <p className="mt-4 text-center text-sm font-medium text-gray-800">{message}</p>}
       </div>
-    </main>
+    </div>
   );
 }

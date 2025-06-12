@@ -1,47 +1,111 @@
 'use client';
-import Link from "next/link";
 
-import '../styles/globals.css';
-import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
-
-
-export default function HomePage() {
+export default function LoginPage() {
   const router = useRouter();
+  const [email, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-
-  const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // TODO: Add authentication logic here
-    console.log("Login form submitted");
+    setMessage('');
+    setIsSubmitting(true);
+
+    try {
+      const res = await fetch('http://localhost:5050/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      });
+
+      const result = await res.json();
+
+      if (res.ok) {
+        const role = result.user.role;
+        switch (role) {
+          case 'SuperAdmin':
+            router.push('/dashboard/superadmin');
+            break;
+          case 'Club Admin':
+            router.push('/dashboard/clubadmin');
+            break;
+          case 'Parents':
+            router.push('/dashboard/parents');
+            break;
+          case 'Independent Coach':
+            router.push('/dashboard/coach');
+            break;
+          case 'Tournament Organiser':
+            router.push('/dashboard/tournament-organiser');
+            break;
+          default:
+            setMessage('Unknown role.');
+        }
+      } else {
+        setMessage(result.message || 'Login failed');
+      }
+    } catch (err) {
+      console.error(err);
+      setMessage('Server error. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <main className="flex h-screen w-full font-sans">
-      {/* Left Side - Login Form */}
+      {/* Left - Form */}
       <div className="w-1/2 bg-gradient-to-br from-gray-100 to-slate-200 text-black flex flex-col justify-center items-center p-8">
-        {/* Logo Image */}
         <div className="mb-6">
           <Image src="/logo3.png" alt="SmashHub Logo" width={200} height={200} priority />
         </div>
 
         <div className="w-full max-w-sm">
-          <form className="space-y-6">
+          <form className="space-y-6" onSubmit={handleLogin}>
             <div>
-              <label className="block mb-1 text-sm font-medium">Username</label>
+              <label htmlFor="email" className="block mb-1 text-sm font-medium">email</label>
               <div className="flex items-center bg-white px-3 py-2 rounded border">
-                <input type="text" placeholder="Username" className="bg-transparent focus:outline-none w-full text-black" />
+                <input
+                  type="text"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Username"
+                  className="bg-transparent focus:outline-none w-full text-black"
+                  required
+                />
               </div>
             </div>
+
             <div>
-              <label className="block mb-1 text-sm font-medium">Password</label>
+              <label htmlFor="password" className="block mb-1 text-sm font-medium">Password</label>
               <div className="flex items-center bg-white px-3 py-2 rounded border">
-                <input type="password" placeholder="Password" className="bg-transparent focus:outline-none w-full text-black" />
+                <input
+                  type="password"
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  className="bg-transparent focus:outline-none w-full text-black"
+                  required
+                />
               </div>
             </div>
-            <button className="w-full py-2 bg-blue-500 hover:bg-blue-600 transition-all duration-300 rounded text-white font-semibold shadow-md hover:shadow-xl">
-              Login
+
+            <button
+              type="submit"
+              className="w-full py-2 bg-blue-500 hover:bg-blue-600 transition-all duration-300 rounded text-white font-semibold shadow-md hover:shadow-xl"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Logging in...' : 'Login'}
             </button>
           </form>
 
@@ -50,39 +114,29 @@ export default function HomePage() {
           </div>
 
           <div className="mt-6 text-center">
- <button
-              onClick={() => router.push("/signup")}
+            <button
+              onClick={() => router.push('/signup')}
               className="text-blue-500 font-semibold hover:underline"
             >
               Sign Up
             </button>
-</div>
+          </div>
 
+          {message && (
+            <p className="mt-4 text-center text-sm font-medium text-red-600">
+              {message}
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Right Side - Info Panel */}
+      {/* Right - Background */}
       <div className="w-1/2 relative bg-gradient-to-br from-blue-50 to-blue-100 text-black p-10 flex flex-col justify-end overflow-hidden">
-        {/* Static Background Court Illustration */}
-        <div className="absolute inset-0 bg-no-repeat bg-cover bg-center" style={{ backgroundImage: "url('/Home-bg2.png')" }} />
-
-        {/* Foreground Content */}
+        <div className="absolute inset-0 bg-[url('/Home-bg8.png')] bg-cover bg-center bg-no-repeat" />
         <div className="relative z-10 max-w-xl mx-auto pb-4">
-          <h2 className="text-3xl font-bold mb-4 drop-shadow-md">
-            All-In-One Badminton Hub
-          </h2>
-          <ul className="space-y-2 text-lg">
-            <li><span className="font-bold">For Players:</span> Track skills (Beginner → Elite)</li>
-            <li><span className="font-bold">For Coaches:</span> Update progress with sliders</li>
-            <li><span className="font-bold">For Admins:</span> Schedule tournaments ; club rights</li>
-            <li><span className="font-bold">For Parents:</span> Export PDF progress reports</li>
-          </ul>
-          <p className="mt-4 italic">"From court assignments to smash evaluations — we've got you covered!"</p>
-
+          {/* Optional content */}
         </div>
       </div>
     </main>
-
   );
 }
-
