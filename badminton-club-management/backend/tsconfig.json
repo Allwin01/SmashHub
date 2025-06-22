@@ -7,11 +7,23 @@
     "outDir": "./dist",
     "esModuleInterop": true,
     "strict": true,
-   
+    "typeRoots": ["./node_modules/@types", "./types"],
     "skipLibCheck": true,
     "moduleResolution": "node",
     "resolveJsonModule": true,
-    "typeRoots": ["./node_modules/@types"]
+    "baseUrl": ".","paths": {
+      "@types/*": ["control/types/*"],
+      "@controllers/*": ["control/controllers/*"],
+      "@middleware/*": ["control/middleware/*"]
+    }
+  },
+  "include": [
+        "./**/*.ts",
+        "./control/types/**/*",
+        "./types",
+        "./server.ts"],
+  "exclude": ["node_modules"]
+}
 
     /* Visit https://aka.ms/tsconfig to read more about this file */
     /* Projects */
@@ -121,7 +133,4 @@
     /* Completeness */
     // "skipDefaultLibCheck": true,                      /* Skip type checking .d.ts files that are included with TypeScript. */
    // "skipLibCheck": true                                 /* Skip type checking all .d.ts files. */
-  },
-  "include": ["./**/*.ts"],
-  "exclude": ["node_modules"]
-}
+

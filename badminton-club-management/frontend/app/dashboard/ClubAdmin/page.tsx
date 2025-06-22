@@ -1,66 +1,178 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SmashHub Club Admin Dashboard</title>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <style>
-      body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      }
-    </style>
-  </head>
-  <body class="bg-blue-100 text-gray-900 min-h-screen">
-    <div class="flex flex-col min-h-screen overflow-x-hidden">
-      <!-- Header -->
-      <header class="flex items-center justify-between border-b border-gray-300 px-10 py-4 bg-white shadow">
-        <div class="flex items-center gap-4">
-          <svg class="w-6 h-6 text-blue-500" fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-            <path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" />
-          </svg>
-          <h1 class="text-lg font-bold text-blue-600">Club Admin</h1>
-        </div>
-        <nav class="flex gap-8">
-          <a href="#" class="text-sm font-medium text-blue-700 hover:underline">Dashboard</a>
-          <a href="#" class="text-sm font-medium text-blue-700 hover:underline">Players</a>
-          <a href="#" class="text-sm font-medium text-blue-700 hover:underline">Tournaments</a>
-          <a href="#" class="text-sm font-medium text-blue-700 hover:underline">Coaching</a>
-        </nav>
-      </header>
+// app/dashboard/clubadmin/page.tsx
+'use client';
 
-      <!-- Main Content -->
-      <main class="flex-1 px-6 md:px-20 py-10">
-        <h2 class="text-3xl font-bold mb-6 text-blue-800">Dashboard</h2>
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Home, UserPlus, Users, BarChart2, CalendarCheck2, Settings, LogOut } from 'lucide-react';
+import { motion } from 'framer-motion';
+import Image from 'next/image';
 
-        <section>
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-6">
-            <a href="/skill-tracking" class="bg-white border border-blue-300 rounded-2xl p-6 shadow-lg hover:shadow-xl transition transform hover:scale-105 flex flex-col items-center text-center">
-              <img src="/icons/skill-tracking.svg" alt="Skill Tracking" class="w-16 h-16 mb-3">
-              <h4 class="font-semibold text-lg text-blue-700 mb-1">Skill Tracking</h4>
-              <p class="text-sm text-gray-600">View and monitor player skill progress</p>
-            </a>
+const navItems = [
+  { label: 'Home', icon: Home, route: '/dashboard/clubadmin' },
+  { label: 'Add Player', icon: UserPlus, route: '/dashboard/clubadmin/add-player' },
+  { label: 'Player Card', icon: Users, route: '/dashboard/clubadmin/player-card' },
+  { label: 'Pegboard', icon: BarChart2, route: '/dashboard/clubadmin/pegboard' },
+  { label: 'Tournament', icon: CalendarCheck2, route: '/dashboard/clubadmin/tournament' },
+];
 
-            <a href="/pegboard" class="bg-white border border-blue-300 rounded-2xl p-6 shadow-lg hover:shadow-xl transition transform hover:scale-105 flex flex-col items-center text-center">
-              <img src="/icons/pegboard.svg" alt="Smart Peg Board" class="w-16 h-16 mb-3">
-              <h4 class="font-semibold text-lg text-blue-700 mb-1">Smart Peg Board</h4>
-              <p class="text-sm text-gray-600">Assign courts and manage court-side activity</p>
-            </a>
+export default function ClubAdminDashboard() {
+  const [clubName, setClubName] = useState('');
+  const [userRole, setUserRole] = useState('Club Admin');
+  const router = useRouter();
 
-            <a href="/tournaments" class="bg-white border border-blue-300 rounded-2xl p-6 shadow-lg hover:shadow-xl transition transform hover:scale-105 flex flex-col items-center text-center">
-              <img src="/icons/tournaments.svg" alt="Tournaments" class="w-16 h-16 mb-3">
-              <h4 class="font-semibold text-lg text-blue-700 mb-1">Tournaments</h4>
-              <p class="text-sm text-gray-600">Organize and monitor tournament events</p>
-            </a>
+  useEffect(() => {
+    const storedClub = localStorage.getItem('clubName');
+    const storedRole = localStorage.getItem('role');
+    if (storedClub) setClubName(storedClub);
+    if (storedRole) setUserRole(storedRole);
+  }, []);
 
-            <a href="/player-cards" class="bg-white border border-blue-300 rounded-2xl p-6 shadow-lg hover:shadow-xl transition transform hover:scale-105 flex flex-col items-center text-center">
-              <img src="/icons/player-card.svg" alt="Player Card" class="w-16 h-16 mb-3">
-              <h4 class="font-semibold text-lg text-blue-700 mb-1">Player Card</h4>
-              <p class="text-sm text-gray-600">View individual player profiles and stats</p>
-            </a>
+  return (
+    <div className="flex min-h-screen bg-gray-50 text-gray-800">
+      {/* Sidebar */}
+      <aside className="w-64 bg-white shadow-md flex flex-col justify-between">
+        <div>
+          <div className="px-6 py-5 border-b text-xl font-bold text-blue-600">
+            {clubName || 'Your Club'}
           </div>
-        </section>
+          <nav className="mt-6 space-y-2 px-4">
+            {navItems.map((item) => (
+              <motion.div
+                key={item.label}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => router.push(item.route)}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer hover:bg-blue-100 transition"
+              >
+                <item.icon size={20} className="text-blue-500" />
+                <span className="text-sm font-medium">{item.label}</span>
+              </motion.div>
+            ))}
+          </nav>
+        </div>
+
+        {/* Profile section */}
+        <div className="p-4 border-t">
+          <div className="flex items-center gap-3">
+            <Image
+              src="/avatar-default.png"
+              alt="profile"
+              width={40}
+              height={40}
+              className="rounded-full border"
+            />
+            <div>
+              <p className="font-semibold text-sm">{userRole}</p>
+              <div className="flex gap-2 mt-1 text-xs text-gray-500">
+                <Settings size={14} className="cursor-pointer hover:text-blue-500" />
+                <LogOut size={14} className="cursor-pointer hover:text-red-500" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 p-6">
+        <motion.h1
+          className="text-2xl font-bold mb-6"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          Welcome to {clubName || 'Club'} Dashboard
+        </motion.h1>
+
+        {/* Additional content can go here */}
+        <div className="text-gray-600">Select an option from the menu to get started.</div>
       </main>
     </div>
-  </body>
-</html>
+  );
+}
+
+
+/*
+
+
+// app/dashboard/clubadmin/page.tsx
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Home, UserPlus, Users, BarChart2, CalendarCheck2, Settings, LogOut } from 'lucide-react';
+import { motion } from 'framer-motion';
+import Image from 'next/image';
+
+export default function ClubAdminDashboard() {
+  const [clubName, setClubName] = useState('');
+  const router = useRouter();
+
+  useEffect(() => {
+    const storedClub = localStorage.getItem('clubName');
+    if (storedClub) setClubName(storedClub);
+  }, []);
+
+  const navItems = [
+    { label: 'Home', icon: Home, route: '/clubadmin/home' },
+    { label: 'Add Player', icon: UserPlus, route: '/clubadmin/add-player' },
+    { label: 'Player Card', icon: Users, route: '/clubadmin/player-card' },
+    { label: 'Smart Pegboard', icon: BarChart2, route: '/clubadmin/pegboard' },
+    { label: 'Organise Tournament', icon: CalendarCheck2, route: '/clubadmin/tournament' },
+  ];
+
+  const handleLogout = () => {
+    localStorage.clear();
+    router.push('/');
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100">
+      //  Top Navigation Bar 
+      <div className="flex justify-between items-center p-4 bg-white shadow-md sticky top-0 z-10">
+        <h1 className="text-xl font-bold text-blue-700">🏸 {clubName || 'Club'} Admin Panel</h1>
+        <div className="flex items-center space-x-4">
+          <Button variant="ghost" onClick={() => router.push('/club-admin/settings')}>
+            <Settings className="h-5 w-5 text-gray-600" />
+          </Button>
+          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-blue-500">
+            <Image
+              src="/default-avatar.png" // Replace with user profile image if available
+              alt="Profile"
+              width={40}
+              height={40}
+              className="object-cover"
+            />
+          </div>
+          <Button variant="outline" onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" /> Logout
+          </Button>
+        </div>
+      </div>
+
+      //  Main Content Grid 
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
+        {navItems.map((item) => (
+          <motion.div
+            key={item.label}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-transform"
+              onClick={() => router.push(item.route)}
+            >
+              <CardContent className="flex flex-col items-center justify-center h-40">
+                <item.icon size={40} className="text-blue-700 mb-4" />
+                <p className="text-lg font-semibold text-blue-900">{item.label}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+*/
+

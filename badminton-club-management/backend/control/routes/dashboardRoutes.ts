@@ -1,41 +1,34 @@
-// 📁 backend/routes/dashboardRoutes.ts
-import express, { Request, Response } from 'express';
-// import { authenticateToken } from '../middleware/authMiddleware';
-// import { authorizeRoles } from '../middleware/roleMiddleware';
-import { verifyToken } from '../middleware/authMiddleware';
+// 📁 backend/routes/dashboardRoutes.ts - Route file that uses above middleware to restrict access to controllers
+
+
+import express from 'express';
+import { authenticateJWT } from '../middleware/authenticateJWT';
 import {
   superAdminOnly,
   clubAdminOnly,
   coachOnly,
   tournamentOrganiserOnly,
   parentOnly
-} from '../middleware/roleMiddleware';
+} from '../middleware/rolemiddleware';
 
+import {
+  getSuperAdminDashboard,
+  getClubAdminDashboard,
+  getCoachDashboard,
+  getTournamentOrganiserDashboard,
+  getParentsDashboard
+} from '../../controllers/dashboardController';
 
 const router = express.Router();
 
-
-router.get('/superadmin', verifyToken, superAdminOnly, (req, res) => {
-  res.json({ message: 'Super Admin dashboard access granted.' });
-});
-
-router.get('/clubadmin', verifyToken, clubAdminOnly, (req, res) => {
-  res.json({ message: 'Club Admin dashboard access granted.' });
-});
-
-router.get('/coach', verifyToken, coachOnly, (req, res) => {
-  res.json({ message: 'Coach dashboard access granted.' });
-});
-
-router.get('/tournament-organiser', verifyToken, tournamentOrganiserOnly, (req, res) => {
-  res.json({ message: 'Tournament Organiser dashboard access granted.' });
-});
-
-router.get('/parents', verifyToken, parentOnly, (req, res) => {
-  res.json({ message: 'Parents dashboard access granted.' });
-});
+router.get('/superadmin', authenticateJWT, superAdminOnly, getSuperAdminDashboard);
+router.get('/clubadmin', authenticateJWT, clubAdminOnly, getClubAdminDashboard);
+router.get('/coach', authenticateJWT, coachOnly, getCoachDashboard);
+router.get('/tournamentorganiser', authenticateJWT, tournamentOrganiserOnly, getTournamentOrganiserDashboard);
+router.get('/parents', authenticateJWT, parentOnly, getParentsDashboard);
 
 export default router;
+
 
 
 /**

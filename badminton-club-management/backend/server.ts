@@ -2,18 +2,19 @@
 
 //import express, { Application, Request, Response, NextFunction } from 'express';
 import express from 'express';
-
 import dotenv from 'dotenv';
-//import mongoose from 'mongoose';
 import connectDB from './config/db';
-
-
 import cors from 'cors';
 
 // Route Imports
 import authRoutes from './control/routes/auth';
 import dashboardRoutes from './control/routes/dashboardRoutes';
 import clubRoutes from './control/routes/clubRoutes';
+import playerRoutes from './control/routes/playerRoutes';
+import { authenticateJWT } from './control/middleware/authenticateJWT';
+import coachRoutes from './control/routes/coach';
+import emailReportRoute from './control/routes/emailReports';
+
 
 
 
@@ -40,6 +41,9 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/clubs', clubRoutes);
+app.use('/api/players', authenticateJWT, playerRoutes);
+app.use('/api/coaches', coachRoutes);
+app.use('/api', emailReportRoute);
 
 
 // 🔌 MongoDB Connection
@@ -61,6 +65,10 @@ app.use('/api/clubs', clubRoutes);
     console.error('❌ MongoDB connection failed:', error.message);
     process.exit(1);
   });
+
+
+ 
+  
 
 // TODO: Add more route groups (e.g., tournaments, players, clubs)
 // TODO: Add centralized error handler middleware

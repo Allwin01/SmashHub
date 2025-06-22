@@ -28,8 +28,14 @@ export default function LoginPage() {
 
       const result = await res.json();
 
+    
       if (res.ok) {
         const role = result.user.role;
+
+        // ✅ Store the JWT token
+        localStorage.setItem('token', result.token);
+        localStorage.setItem('clubName', result.clubName || result.user?.clubName || '');
+        console.log('Returned token:', result.token);  
         switch (role) {
           case 'SuperAdmin':
             router.push('/dashboard/superadmin');
@@ -38,13 +44,13 @@ export default function LoginPage() {
             router.push('/dashboard/clubadmin');
             break;
           case 'Parents':
-            router.push('/dashboard/parents');
+            router.push('/dashboard/Parents');
             break;
           case 'Independent Coach':
-            router.push('/dashboard/coach');
+            router.push('/dashboard/Independentcoach');
             break;
           case 'Tournament Organiser':
-            router.push('/dashboard/tournament-organiser');
+            router.push('/dashboard/TournamentOrganiser');
             break;
           default:
             setMessage('Unknown role.');

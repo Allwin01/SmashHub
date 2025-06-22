@@ -49,6 +49,9 @@ It helps coaches, parents, admins, and players manage training, tournaments, cou
 
 ## 📦 Project Setup Instructions
 
+tree -L 3 frontend/app
+
+
 
 ## 📦 Installation
 
@@ -86,10 +89,10 @@ npx tailwindcss init -p
 
 npm install express@4.18.2 @types/express@4.17.17   
 
-npm install mongoose@7.6.5 @types/mongoose@5.11.97  # Database
-npm install bcrypt@5.1.1 @types/bcrypt@5.0.1        # Password hashing
-npm install jsonwebtoken@9.0.2 @types/jsonwebtoken@9.0.3  # Auth tokens
-npm install cors@2.8.5 @types/cors@2.8.13           # CORS middleware
+npm install mongoose@7.6.5 @types/mongoose@5.11.97  - Database
+npm install bcrypt@5.1.1 @types/bcrypt@5.0.1        - Password hashing
+npm install jsonwebtoken@9.0.2 @types/jsonwebtoken@9.0.3  -Auth tokens
+npm install cors@2.8.5 @types/cors@2.8.13           - CORS middleware
 
 // - for Typescript 
 npx tsc --init
@@ -107,6 +110,8 @@ npm install cors //  for CORS ( Cross-Orgin Resource Sharing) in Express backend
 
 npm install bcrypt  // to encryp password
 npm install mongoose bcrypt jsonwebtoken @types/bcrypt @types/jsonwebtoken  -  for password encryption  and session token 
+npm install nodemailer
+npm install --save-dev @types/nodemailer
 
 
 npm install    ( install depedencied) 
@@ -114,7 +119,10 @@ npm run dev    (Run the Development Server)
 
 ---
 
- ###   Create .env.local in the root:
+npx tailwindcss init -p   -  Initialize Tailwind 
+npx shadcn@latest init - Add ShadCN UI CLI:
+
+ ----  Create .env.local in the root:
 
 
 MONGODB_URI=mongodb://localhost:27017/smashhub
@@ -154,3 +162,38 @@ db.users.find({email: "user@example.com"})
 
 // Or if you need to authenticate
 db.auth("username", "password")
+
+
+
+
+--Dashboard
+npx shadcn@latest init
+
+
+npx shadcn add card button input label textarea dropdown-menu dialog avatar Tooltip Tabs Input select popover command checkbox
+--- npx shadcn@latest add popover
+npx shadcn@latest add slider
+npm install framer-motion
+npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
+npm install recharts
+npm install html2canvas jspdf
+npx shadcn-ui@latest add radio-group
+
+npx shadcn@latest add radio-group
+npm install date-fns
+npm install debug
+Troubleshooting 
+rm -rf node_modules package-lock.json .next
+
+sudo lsof -i :5000  // to check which service running on the port
+kill -9 <PID>
+
+git status
+git add .                         # Stage all changes
+# OR
+git add filename.ext              # Stage specific file
+# OR
+git add folder/                   # Stage specific folder
+
+git commit -m "crated pegboard,Player attendance and Skill View export"
+git push origin branch-name
