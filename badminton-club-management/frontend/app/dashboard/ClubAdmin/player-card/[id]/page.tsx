@@ -21,7 +21,7 @@ import SkillReportCardWrapper from '@/components/SkillReportCardWrapper';
 interface PlayerDetails {
   _id: string;
   firstName: string;
-  surname: string;
+  surName: string;
   email: string;
   dob: string;
   sex: string;
@@ -53,6 +53,26 @@ export default function PlayerDetailPage() {
   const [userRole, setUserRole] = useState<string>('');  // Holds the logged-in user's role (Coach, Parent, etc.)
   const [unsavedChanges, setUnsavedChanges] = useState(false);  //Flags whether the user has made changes (e.g., to skill sliders) that haven’t been saved yet.
   const [showSkillReport, setShowSkillReport] = useState(false);  // For Skill Report View
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+  const normalizedRole = userRole.replace(/\s+/g, '');
+
+
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUserRole(payload.role || '');
+        
+
+      } catch (err) {
+        console.error('⚠️ Failed to decode token:', err);
+      }
+    }
+  }, []);
+  
 
   // Skill flatten and nested to send group header and skills when submitted
   const flattenSkills = (nested: any): Record<string, number> => {
@@ -91,7 +111,7 @@ useEffect(() => {
         setForm({
           _id: data._id,
           firstName: data.firstName,
-          surname: data.surname || '',
+          surName: data.surName || '',
           email: data.email,
           dob: data.dob || '',
           sex: data.sex,
@@ -125,7 +145,8 @@ useEffect(() => {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
-        setCoaches(data.map((coach: any) => `${coach.firstName} ${coach.lastName}`));
+        setCoaches(data.map((coach: any) => `${coach.firstName} ${coach.surName || ''}`.trim()));
+
       } catch (err) {
         console.error('Failed to fetch coaches:', err);
       }
@@ -146,6 +167,30 @@ useEffect(() => {
     setForm((prev) => prev ? { ...prev, [name]: checked } : prev);
   };
 
+
+  const groupSkillsByCategory = (flatSkills: Record<string, number>) => {
+    const grouped: Record<string, Record<string, number>> = {};
+  
+    for (const [category, skillList] of Object.entries(skillGroups)) {
+      const skillsInGroup: Record<string, number> = {};
+  
+      skillList.forEach((skill) => {
+        if (flatSkills.hasOwnProperty(skill)) {
+          skillsInGroup[skill] = flatSkills[skill];
+        }
+      });
+  
+      if (Object.keys(skillsInGroup).length > 0) {
+        grouped[category] = skillsInGroup;
+      }
+    }
+  
+    return grouped;
+  };
+  
+
+
+//Handle Save Button
   const handleSave = async () => {
     if (!form || !player) return;
     try {
@@ -169,6 +214,37 @@ useEffect(() => {
       toast.error('❌ Failed to update player details');
     }
   };
+// Handle Delete Button
+const handleDeletePlayer = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`http://localhost:5050/api/players/${player?._id}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        reason: deleteReason,
+      }),
+    });
+
+    const data = await res.json();
+    console.log('🧾 Response:', data);
+
+    if (!res.ok) throw new Error(data.message || 'Failed to delete player');
+
+    toast.success('🗑️ Player deleted successfully');
+    setShowDeleteConfirm(false);
+    window.location.href = '/dashboard/clubadmin/player-card';
+  } catch (err) {
+    toast.error('❌ Failed to delete player');
+    console.error('❌ Delete error:', err);
+  }
+};
+
+
+  
 
   //{/* This useEffect block is used to warn the user if they try to leave the page with unsaved changes.  *
   
@@ -261,6 +337,14 @@ useEffect(() => {
     'Footwork & Speed': ['6-Corner Footwork', 'Shadow Footwork', 'Pivot & Rotation', 'Recovery Steps'],
   };
 
+  console.log('🧪 userRole:', userRole);
+
+  const handleSkillReportOpen = () => {
+    localStorage.setItem('selectedPlayerId', player._id); // 👈 Add this
+    setShowSkillReport(true);
+  };
+  
+
   return (
     <div className="p-6 space-y-8">
       <section className="flex items-center gap-6">
@@ -274,7 +358,7 @@ useEffect(() => {
           />
         </div>
         <div>
-          <h2 className="text-2xl font-bold">{form.firstName} {form.surname}</h2>
+          <h2 className="text-2xl font-bold">{form.firstName} {form.surName}</h2>
           <p className="text-sm text-gray-600">Level: {form.level || 'N/A'}</p>
           <p className="text-sm text-gray-700">Membership Status: {form.membershipStatus}</p>
           {(form.playerType === 'Coaching and Club Member' || form.playerType === 'Coaching only') && (
@@ -283,20 +367,20 @@ useEffect(() => {
         </div>
       </section>
 
-      <div className="flex justify-end">
-        <Button onClick={() => setShowDialog(true)}>Edit Personal Details</Button>
-        <Button className="ml-4" onClick={handleSkillMatrixSave}>Save Skill Matrix</Button>
-       {/* <Button className="ml-4" onClick={() => setShowSkillReport(true)}>Skill Export View</Button>  */}
-        <Button
-  className="ml-4"
-  onClick={() => {
-    console.log('📤 Skill Export View clicked');
-    setShowSkillReport(true);
-  }}
->
+      <div className="flex justify-end flex-wrap gap-2 mt-4">
+  <Button onClick={() => setShowDialog(true)}>Edit Personal Details</Button>
+  <Button className="ml-2" onClick={handleSkillMatrixSave}>Save Skill Matrix</Button>
+  <Button className="ml-2" onClick={handleSkillReportOpen}>
   Skill Export View
 </Button>
-      </div>
+
+{(normalizedRole === 'ClubAdmin' || normalizedRole === 'SuperAdmin') && (
+  <Button variant="destructive" className="ml-2" onClick={() => setShowDeleteConfirm(true)}>
+    Delete Player
+  </Button>
+)}
+
+</div>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="bg-white">
@@ -326,6 +410,11 @@ useEffect(() => {
                   </Select>
                 </div>
               );
+
+  // Delete Dialog            
+
+
+  
               return (
                 <div key={key} className="flex flex-col">
                   <label className="text-sm font-medium capitalize">{key.replace(/([A-Z])/g, ' $1')}</label>
@@ -386,18 +475,33 @@ useEffect(() => {
    
       {console.log('🟢 showSkillReport value:', showSkillReport)}
 
-        {showSkillReport && (
-         <SkillReportCardWrapper
-             playerName={`${form.firstName} ${form.surname}`}
-             playerLevel={form.level}
-             playerPhoto={player.profileImage}
-              skillMatrix={player.skillMatrix}
-             skillHistory={player.skillHistory}
-              coachName={form.coachName}
-             onClose={() => setShowSkillReport(false)}
-            />
+   
 
-        )}
+
+      {showSkillReport && (
+ <SkillReportCardWrapper player={player} onClose={() => setShowSkillReport(false)} />
+
+)}
+
+
+<Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Confirm Deletion</DialogTitle>
+    </DialogHeader>
+    <p>This action will permanently delete this player. Are you sure?</p>
+    <textarea
+      className="w-full mt-2 p-2 border rounded"
+      placeholder="Optional: reason for deleting this player"
+      value={deleteReason}
+      onChange={(e) => setDeleteReason(e.target.value)}
+    />
+    <div className="flex justify-end gap-2 mt-4">
+      <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+      <Button variant="destructive" onClick={handleDeletePlayer}>Yes, Delete Player</Button>
+    </div>
+  </DialogContent>
+</Dialog>
 
       <ToastContainer />
     </div>

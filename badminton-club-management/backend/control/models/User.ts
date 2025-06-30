@@ -5,7 +5,7 @@ import bcrypt from 'bcrypt';
 // ✅ TypeScript interface for User document
 export interface IUser extends Document {
 firstName: string;
-surname: string;
+surName: string;
 email: string;
 password: string;
 role: string;
@@ -28,7 +28,7 @@ comparePassword(candidatePassword: string): Promise<boolean>;
 // ✅ Define the User schema
 const UserSchema: Schema<IUser> = new Schema<IUser>({
 firstName: { type: String, required: true },
-surname: { type: String, required: true },
+surName: { type: String, required: true },
 email: { type: String, required: true, lowercase: true, trim: true },
 
 password: { type: String, required: true },

@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -83,25 +83,40 @@ export default function PegBoard() {
   const [hasFetched, setHasFetched] = useState(false);
 
   // Fetch player attendance from backend
-  useEffect(() => {
-    const fetchPlayers = async () => {
-      try {
-        const today = new Date().toISOString().split('T')[0];
-        const token = localStorage.getItem('token');
-        const clubName = localStorage.getItem('clubName');
-        const res = await fetch(`http://localhost:5050/api/player/attendance?date=${today}&clubName=${clubName}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error('Fetch failed');
-        const data = await res.json();
-        setPlayers(data);
-        setHasFetched(true);
-      } catch (err) {
-        if (!hasFetched) toast.error('❌ Failed to fetch players');
+
+const toastShownRef = useRef(false);
+
+useEffect(() => {
+  const fetchPlayers = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const token = localStorage.getItem('token');
+      const clubId = localStorage.getItem('clubId');
+
+      if (!token || !clubId) throw new Error('Missing token or clubId');
+
+      const res = await fetch(
+        `http://localhost:5050/api/players/attendances?date=${today}&clubId=${clubId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!res.ok) throw new Error(`Fetch failed with status ${res.status}`);
+
+      const data = await res.json();
+      setPlayers(data);
+      setHasFetched(true);
+    } catch (err) {
+      console.error('❌ Error fetching players:', err);
+      if (!toastShownRef.current) {
+        toast.error('❌ Failed to fetch players');
+        toastShownRef.current = true;
       }
-    };
-    fetchPlayers();
-  }, [hasFetched]);
+    }
+  };
+
+  if (!hasFetched) fetchPlayers();
+}, [hasFetched]);
+
     
 
 
@@ -238,7 +253,7 @@ const handleStartStop = async (courtNo: number) => {
             duration,
             courtNo
           };
-          await fetch('http://localhost:5050/api/player/match-history', {
+          await fetch('http://localhost:5050/api/players/match-history', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify(body)

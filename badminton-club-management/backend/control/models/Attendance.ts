@@ -10,4 +10,4 @@ const attendanceSchema = new mongoose.Schema({
   status: { type: String, enum: ['Present', 'Absent'], required: true },
 });
 
-export default mongoose.models.Attendance || mongoose.model('Attendance', attendanceSchema);
+export default mongoose.models.Attendance || mongoose.model('Attendance', attendanceSchema, 'attendances');

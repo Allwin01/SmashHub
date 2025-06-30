@@ -10,7 +10,7 @@ export default function SignupOverlay() {
 
   const [formData, setFormData] = useState({
     firstName: '',
-    lastName: '',
+    surName: '',
     email: '',
     password: '',
     address1: '',
@@ -111,7 +111,7 @@ export default function SignupOverlay() {
         <form className="space-y-4 text-gray-800" onSubmit={handleSubmit}>
           <div className="grid grid-cols-2 gap-4">
             <input name="firstName" value={formData.firstName} onChange={handleChange} placeholder="First Name" className="border p-2 rounded text-gray-900" required />
-            <input name="lastName" value={formData.lastName} onChange={handleChange} placeholder="Last Name" className="border p-2 rounded text-gray-900" required />
+            <input name="surName" value={formData.surName} onChange={handleChange} placeholder="Surname" className="border p-2 rounded text-gray-900" required />
           </div>
           <input name="email" type="email" value={formData.email} onChange={handleChange} placeholder="Email Address" className="w-full border p-2 rounded text-gray-900" required />
     

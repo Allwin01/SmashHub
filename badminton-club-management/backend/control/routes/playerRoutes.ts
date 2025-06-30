@@ -6,28 +6,29 @@ import {
   getPlayerById,
   addPlayer,
   updatePlayer,
-  deletePlayer,
+  deletePlayerPost,
   updateSkillMatrix,
-  checkDuplicatePlayer,getPlayersByClub,markAttendance
+  checkDuplicatePlayer,getPlayersByClub,markAttendance,getPlayersWithAttendance
 } from '../../controllers/playercontrollers';
 
+  // player.routes.ts
 const router = express.Router();
-router.get('/by-club', authenticateJWT, getPlayersByClub);  // GET players mapped to user's club
-router.get('/check-duplicate', authenticateJWT,checkDuplicatePlayer);
-router.get('/', authenticateJWT, clubAdminOnly, getPlayers); // ✅ Get all players
-router.get('/:id', authenticateJWT, clubAdminOnly, getPlayerById); // ✅ Get player by ID
 
+router.get('/attendances', authenticateJWT, getPlayersWithAttendance);  // ⬅️ keep before `/:id`
+router.get('/by-club', authenticateJWT, getPlayersByClub);
+router.get('/check-duplicate', authenticateJWT, checkDuplicatePlayer); // for Add player
 
+router.get('/', authenticateJWT, getPlayers);  // ✅ Get all players - for player card
 
-
-// other routes
+// CRUD Routes (POST, PUT, DELETE)
+router.post('/attendance', authenticateJWT, markAttendance);
 router.post('/', authenticateJWT, clubAdminOnly, addPlayer);
+router.put('/:id/skills', authenticateJWT, updateSkillMatrix);
 router.put('/:id', authenticateJWT, clubAdminOnly, updatePlayer);
-router.delete('/:id', authenticateJWT, clubAdminOnly, deletePlayer);
-router.put('/:id/skills', authenticateJWT,updateSkillMatrix);
-router.post('/attendance', authenticateJWT, markAttendance); // POST attendance marking
+router.delete('/:id', authenticateJWT, clubAdminOnly, deletePlayerPost);
 
+// ❗ Always keep this last to prevent route collision
+router.get('/:id', authenticateJWT, clubAdminOnly, getPlayerById);  // ✅ Get player by ID for profile page
 
-  
 
 export default router;

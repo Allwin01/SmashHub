@@ -23,6 +23,9 @@ const path = require('path');
     images: {
       domains: ['i.pravatar.cc'],
     },
+    typescript: {
+      ignoreBuildErrors: false, // Should be false
+    },
   };
   
 

@@ -40,11 +40,27 @@ const skillGroups: Record<string, string[]> = {
   'Footwork & Speed': ['6-Corner Footwork', 'Shadow Footwork', 'Pivot & Rotation', 'Recovery Steps'],
 };
 
-const getLevelLabel = (value: number): string => {
-  const badge = value > 7 ? '🥇' : value >= 5 ? '🥈' : '🥉';
-  const label = value > 7 ? 'Advanced Level' : value >= 5 ? 'Intermediate Level' : 'Beginner Level';
-  return `${label} ${badge}`;
-};
+const getLevelLabel = (value: number): JSX.Element => {
+    let label = 'Beginner';
+    let badge = '🥉';
+  
+    if (value >= 7) {
+      label = 'Advanced';
+      badge = '🥇';
+    } else if (value >= 5) {
+      label = 'Intermediate';
+      badge = '🥈';
+    }
+  
+    const level = value % 1 >= 0.5 ? Math.ceil(value) : Math.floor(value);
+  
+    return (
+      <span className="font-semibold">
+        Lvl {level} – {label}
+      </span>
+    );
+  };
+  
 
 interface SkillProgressVisualProps {
   player: any;
@@ -117,6 +133,9 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
       }
     });
 
+    console.log('🧠 Last known skill values:', lastKnownSkillValues);
+
+
     const lineDatasets = Object.keys(skillGroups).map((group, i) => {
       const data = radarDates.map(date => {
         const skillValues = skillGroups[group].map(skill => groupedRadar[group]?.[date]?.[skill] ?? 0);
@@ -174,6 +193,26 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
   };
 
   if (!player) return <div className="p-6">Loading...</div>;
+
+
+  const latestValueMap: Record<string, number> = {};
+
+  (player.skillsHistory || []).forEach(entry => {
+      const { skills } = entry;
+      for (const group in skillGroups) {
+        if (!latestValueMap[group]) latestValueMap[group] = {};
+        for (const skill of skillGroups[group]) {
+          const value = skills?.[group]?.[skill];
+          if (value !== undefined) {
+            latestValueMap[group][skill] = value;
+            console.log(`✅ Found: ${group} > ${skill} = ${value}`);
+          }
+        }
+      }
+    });
+
+    console.log("✅ Final latestValueMap:", latestValueMap);
+
  
   return (
     <div ref={reportRef} className={`p-6 space-y-6 text-sm ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-white text-black'}`}>
@@ -219,17 +258,27 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
         </CardContent>
       </Card>
   
-     {/* Radar Charts */}
+     {/* Radar Charts (Latest Only) */}
+
+{/* Radar Charts */}
+{/* Radar Charts */}
 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-4">
+ 
+
   {Object.entries(skillGroups).map(([groupName, skills], i) => {
-    const latestEntry = player.skillsHistory?.[player.skillsHistory.length - 1];
-    const latestDate = latestEntry?.date || '';
-    const latestSkills = latestEntry?.skills?.[groupName] || {};
+    // 👉 Prepare labels (trim skill names)
+    const trimmedLabels = skills.map(skill => skill.replace(/\s*\(.*?\)\s*/g, '').trim());
+  
+      // 👉 Get values from skillMatrix
+      const values = skills.map(skill => {
+        const group = player.skillMatrix?.[groupName];
+        return group?.[skill] ?? 0;
+      });
 
     const datasets = [
       {
-        label: `Snapshot on ${latestDate}`,
-        data: skills.map(skill => latestSkills?.[skill] ?? 0),
+        label: 'Current Skill Level',
+        data: values,
         backgroundColor: `rgba(${radarColors[i % radarColors.length]}, 0.2)`,
         borderColor: `rgba(${radarColors[i % radarColors.length]}, 1)`,
         borderWidth: 2,
@@ -238,21 +287,18 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
 
     return (
       <div key={groupName} className="bg-white p-4 rounded shadow">
-        <h4 className="text-base font-medium text-center mb-1">{groupName}</h4>
-        <div className="h-80">
+
+
+       <h4 className="text-lg font-bold text-center mb-2">{groupName}</h4>
+
+        <div className="h-[300px] w-full">
           <Radar
-            data={{ labels: skills, datasets }}
-            options={{
+           data={{ labels: trimmedLabels, datasets }}
+           options={{
               responsive: true,
+              maintainAspectRatio: false, 
               plugins: {
-                legend: {
-                  display: true,
-                  position: 'top',
-                  labels: {
-                    font: { size: 10 },
-                    color: theme === 'dark' ? '#ffffff' : '#000000',
-                  },
-                },
+                legend: { display: false },
                 tooltip: {
                   callbacks: {
                     label: (context: any) =>
@@ -262,14 +308,27 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
               },
               scales: {
                 r: {
+                    min: 0,
+                    max: 10, // 👈 ensures chart always uses full skill scale
                   ticks: { display: false },
+
                   pointLabels: {
-                    font: { size: 10 },
+                    font: {
+                      size: 12, // 👈 increase font size
+                      weight: '600',
+                    },
                     color: theme === 'dark' ? '#ffffff' : '#000000',
+                    callback: function (label: string) {
+// ✅ Split label into multiple lines based on space
+const words = label.split(' ');
+if (words.length > 1) {
+  return [words[0], words.slice(1).join(' ')]; // e.g., ["Shadow", "Footwork"]
+}
+return label;
+                    },
                   },
-                  grid: {
-                    color: theme === 'dark' ? '#4b5563' : '#d1d5db',
-                  },
+                 
+                  grid: { color: theme === 'dark' ? '#4b5563' : '#d1d5db' }, 
                 },
               },
             }}
@@ -279,6 +338,9 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
     );
   })}
 </div>
+
+
+
 
   
       {/* Line Chart */}

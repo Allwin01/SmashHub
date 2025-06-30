@@ -5,12 +5,13 @@ import jwt from 'jsonwebtoken';
 import User from '../control/models/User';
 import { AuthRequest } from '../types/AuthRequest';
 import { AuditLog } from '../control/models/AuditLog'; // import AuditLog model
+import Club from '../control/models/Club';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default_secret';
 
 interface SignupRequestBody {
   firstName: string;
-  surname: string;
+  surName: string;
   email: string;
   password: string;
   address1: string;
@@ -32,7 +33,7 @@ export const signupUser = async (
 ): Promise<Response | void> => {
   try {
     const {
-      firstName, surname, email, password,
+      firstName, surName, email, password,
       address1, address2, postcode, county, country,
       role: rawRole, clubName, clubAddress, clubCity, selectedClub
     } = req.body;
@@ -45,9 +46,21 @@ export const signupUser = async (
       return res.status(409).json({ message: 'Email already registered' });
     }
 
+// ✅ Optional: Create club if it doesn't already exist
+if ((role === 'Club Admin' || role === 'Independent Coach') && clubName) {
+  const existingClub = await Club.findOne({ name: clubName });
+  if (!existingClub) {
+    await Club.create({
+      name: clubName,
+      address: clubAddress,
+      city: clubCity,
+    });
+    console.log(`🏸 New club '${clubName}' created`);
+  }
+}
     const newUser = new User({
       firstName,
-      surname,
+      surName,
       email: email.toLowerCase(),
       password: password,
       address: {
@@ -79,7 +92,7 @@ export const signupUser = async (
         model: 'User',
         documentId: savedUser._id,
         action: 'create',
-        changedBy: `${firstName} ${surname}`,
+        changedBy: `${firstName} ${surName}`,
         role,
         timestamp: new Date(),
         context: 'User Signup',
@@ -97,6 +110,7 @@ export const signupUser = async (
     return res.status(500).json({ message: 'Signup failed', error: (err as Error).message });
   }
 };
+
 
 // ✅ Login Controller
 export const loginUser = async (
@@ -119,17 +133,36 @@ export const loginUser = async (
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
+    
 
+// ✅ Fetch clubId from clubName or selectedClub
+const clubName = user.club?.name || user.selectedClub || '';
+let clubId = '';
+
+
+
+if (clubName) {
+  const club = await Club.findOne({ name: clubName });
+  if (club) {
+    clubId = club._id.toString();  // ✅ Use ObjectId as string
+  }
+}
+console.log('✅ Login response:', clubId);
+
+
+
+// ✅ Now generate token with clubName and clubId
     const token = jwt.sign(
       {
         id: user._id.toString(),
-        role: user.role,
-        clubName: user.club?.name || user.selectedClub || '',
+        role: user.role.replace(/\s/g, ''), // convert "Club Admin" → "ClubAdmin"
+        clubName,
+        clubId, // ✅ inject real ID
       },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
-
+    
     console.log('✅ Generated token:', token);
 
     if (process.env.ENABLE_AUDIT_LOG === 'true') {
@@ -137,23 +170,25 @@ export const loginUser = async (
         model: 'User',
         documentId: user._id,
         action: 'login',
-        changedBy: `${user.firstName} ${user.surname}`,
-        role: user.role,
+        changedBy: `${user.firstName} ${user.surName}`,
+        role: user.role.replace(/\s/g, ''), // convert "Club Admin" → "ClubAdmin",
         timestamp: new Date(),
         context: 'User Login',
         changes: null
       });
     }
+   
 
     return res.status(200).json({
       message: 'Login successful',
-      token,                 // 🔑 JWT
+      token,
       user: {
         role: user.role,
-        clubName: user.club?.name || user.selectedClub || '',
+        clubName,
+        clubId, // ✅ send back to frontend
         email: user.email,
         firstName: user.firstName,
-        surname: user.surname
+        surname: user.surName
       }
     });
   } catch (err) {

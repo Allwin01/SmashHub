@@ -1,6 +1,5 @@
 
 // ... previous imports
-// ... previous imports
 import { Request, Response } from 'express';
 import Player from '../control/models/Player';
 import { AuthRequest } from '../types/AuthRequest';
@@ -20,33 +19,53 @@ const validLevels = ['Beginner', 'Intermediate', 'Advanced'];
 const validMembershipStatuses = ['Active', 'Inactive', 'Paused', 'Discontinued', 'Guest'];
 const validPaymentStatuses = ['Paid', 'Due', 'Partial'];
 
+export const skillGroups: Record<string, string[]> = {
+  'Movement Phases': ['Split-Step', 'Chasse Step', 'Lunging', 'Jumping'],
+  'Grips & Grip Positions': ['Basic Grip', 'Panhandle', 'Bevel', 'Thumb Grip', 'Grip Adjustment'],
+  'Forehand Strokes': ['Clear', 'Drop Shot', 'Smash', 'Slice Drop', 'Lift (Underarm)', 'Net Drop (Underarm)'],
+  'Backhand Strokes': ['Clear (Backhand)', 'Drop Shot (Backhand)', 'Lift (Backhand)', 'Net Drop (Backhand)'],
+  'Serve Techniques': ['Low Serve', 'High Serve', 'Flick Serve', 'Drive Serve'],
+  'Footwork & Speed': ['6-Corner Footwork', 'Shadow Footwork', 'Pivot & Rotation', 'Recovery Steps'],
+};
 
-// Addplayer
+
+// Add Player
+
 export const addPlayer = async (req: AuthRequest, res: Response) => {
-  console.log('🔐 Decoded user (addPlayer):', req.user);
-
   try {
     const user = req.user;
+    const clubId = user?.clubId;
 
-    // 🔍 Lookup actual clubId from clubName
-    const club = await Club.findOne({ name: user?.clubName });
-    if (!club) {
-      return res.status(404).json({ message: `Club '${user?.clubName}' not found` });
+    if (!clubId) {
+      return res.status(400).json({ message: 'Club ID not found in user context.' });
     }
 
     const {
-      firstName, surname, dob, sex, isJunior, parentName, parentPhone, email,
+      firstName, surName, dob, sex, isJunior, parentName, parentPhone, email,
       emergencyContactname, emergencyContactphonenumber, joiningDate,
       paymentStatus, coachName, membershipStatus, level, clubRoles,
       playerType, profileImage
     } = req.body;
+
+    // ✅ Check for existing player
+    const existingPlayer = await Player.findOne({
+      firstName: firstName.trim(),
+      surName: surName.trim(),
+      clubId
+    });
+
+    if (existingPlayer) {
+      return res.status(409).json({
+        message: `Player '${firstName} ${surName}' already exists in this club.`
+      });
+    }
 
     const dobDate = new Date(dob);
     const age = new Date().getFullYear() - dobDate.getFullYear();
 
     const newPlayer = new Player({
       firstName,
-      surname,
+      surName,
       dob: dobDate,
       sex,
       isJunior,
@@ -61,7 +80,7 @@ export const addPlayer = async (req: AuthRequest, res: Response) => {
       membershipStatus,
       coachName,
       level,
-      clubId: club._id, // ✅ Use ObjectId from actual Club
+      clubId, // ✅ Directly using clubId from user
       clubRoles,
       playerType,
       profileImage,
@@ -69,7 +88,6 @@ export const addPlayer = async (req: AuthRequest, res: Response) => {
 
     await newPlayer.save();
 
-    // 📝 Log audit entry
     await logAudit({
       model: 'Player',
       documentId: newPlayer._id,
@@ -86,6 +104,7 @@ export const addPlayer = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to create player', error });
   }
 };
+
 
 
 // UpdatePlayer
@@ -117,42 +136,61 @@ export const updatePlayer = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export const deletePlayer = async (req: AuthRequest, res: Response) => {
-  console.log('🔐 Decoded user (deletePlayer):', req.user);
-    try {
-    const user = req.user;
-    const { id } = req.params;
-    const deleted = await Player.findByIdAndDelete(id);
+// Delete Player
 
-    if (!deleted) return res.status(404).json({ message: 'Player not found' });
+
+export const deletePlayerPost = async (req: AuthRequest, res: Response) => {
+  console.log('🔐 Decoded user (deletePlayerPost):', req.user);
+
+  try {
+    const user = req.user;
+    const { playerId, reason } = req.body;
+
+    if (!playerId) {
+      return res.status(400).json({ message: 'Missing playerId' });
+    }
+
+    if (user?.role !== 'ClubAdmin' && user?.role !== 'SuperAdmin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const deleted = await Player.findByIdAndDelete(playerId);
+
+    if (!deleted) {
+      return res.status(404).json({ message: 'Player not found' });
+    }
 
     await logAudit({
-  model: 'Player',
-  documentId: deleted._id,
-  action: 'delete',
-  changedBy: user?.fullName || user?.email || 'Unknown',
-  role: user?.role || 'Unknown',
-  context: 'Delete Player',
-  changes: deleted.toObject()
-});
+      model: 'Player',
+      documentId: deleted._id,
+      action: 'delete',
+      changedBy: user?.fullName || user?.email || 'Unknown',
+      role: user?.role || 'Unknown',
+      context: `Delete Player${reason ? ` — Reason: ${reason}` : ''}`,
+      changes: deleted.toObject(),
+    });
 
-    res.json({ message: 'Player deleted successfully' });
+    return res.status(200).json({ message: 'Player deleted successfully' });
   } catch (err) {
-    console.error('Delete error:', err);
-    res.status(500).json({ message: 'Failed to delete player' });
+    console.error('❌ Delete error:', err);
+    return res.status(500).json({ message: 'Failed to delete player' });
   }
 };
+
+
+
+//   GetPlayer
+
 
 export const getPlayers = async (req: AuthRequest, res: Response) => {
   console.log('🔐 Decoded user (getPlayers):', req.user);
   try {
     const user = req.user;
-   {/* if (!user?.clubName) {
-      return res.status(400).json({ message: 'Missing club name in token' });
-    }
-  const players = await Player.find({ clubId: club._id }); */}
+
 
     console.log('🔐 Decoded user (getPlayers):', user);
+    console.log('🔍 Token user:', req.user);
+
 
     // 🔍 Get clubId from clubName
     const club = await Club.findOne({ name: user?.clubName });
@@ -168,17 +206,58 @@ export const getPlayers = async (req: AuthRequest, res: Response) => {
   }
 };
 
+
 export const getPlayerById = async (req: AuthRequest, res: Response) => {
-  console.log('🔐 Decoded user (getPlayerById):', req.user);
   try {
     const player = await Player.findById(req.params.id);
-    console.log('📥 getPlayerById - Player fetched:', player);
     if (!player) return res.status(404).json({ message: 'Player not found' });
-    res.json(player);
+
+    const playerObj = player.toObject();
+
+    // ✅ Convert skillMatrix (object of objects)
+    const skillMatrixPlain: Record<string, Record<string, number>> = {};
+
+    for (const category in player.skillMatrix) {
+      const skillMap = player.skillMatrix[category];
+      skillMatrixPlain[category] = {};
+      for (const skill in skillMap) {
+        skillMatrixPlain[category][skill] = skillMap[skill];
+      }
+    }
+
+    // ✅ Overwrite with latest history, Map or plain object
+    const latestHistory = player.skillsHistory?.[player.skillsHistory.length - 1];
+
+    if (latestHistory?.skills instanceof Map) {
+      for (const [category, skillMap] of latestHistory.skills.entries()) {
+        if (!skillMatrixPlain[category]) skillMatrixPlain[category] = {};
+        for (const [skill, value] of skillMap.entries()) {
+          skillMatrixPlain[category][skill] = value;
+        }
+      }
+    } else if (typeof latestHistory?.skills === 'object') {
+      for (const [category, skillMap] of Object.entries(latestHistory.skills)) {
+        if (!skillMatrixPlain[category]) skillMatrixPlain[category] = {};
+        for (const [skill, value] of Object.entries(skillMap)) {
+          skillMatrixPlain[category][skill] = value;
+        }
+      }
+    }
+
+    // ✅ Add skillMatrix and clubName to response object
+    (playerObj as any).skillMatrix = skillMatrixPlain;
+    (playerObj as any).clubName = req.user?.clubName || '';
+
+    return res.json(playerObj);
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('❌ getPlayerById error:', err);
+    return res.status(500).json({ error: 'Server error' });
   }
 };
+
+
+
+
 
 
 // Check for Duplicate player by first Name and Surname
@@ -188,18 +267,18 @@ export const getPlayerById = async (req: AuthRequest, res: Response) => {
   console.log('🔐 Headers:', req.headers);
   console.log('📦 Query params:', req.query);
   try {
-    const { firstName, surname, clubName } = req.query;
-    console.log('🔍 Duplicate check request:', { firstName, surname, clubName });
+    const { firstName, surName, clubId } = req.query;
+    console.log('🔍 Duplicate check request:', { firstName, surName, clubId });
 
-    if (!firstName || !surname || !clubName) {
-      console.warn('⚠️ Missing required parameters:', { firstName, surname, clubName });
+    if (!firstName || !surName || !clubId) {
+      console.warn('⚠️ Missing required parameters:', { firstName, surName, clubId });
       return res.status(400).json({ message: 'Missing parameters' });
     }
 
     const existingPlayer = await Player.findOne({
       firstName: { $regex: `^${firstName}$`, $options: 'i' },
-      surname: { $regex: `^${surname}$`, $options: 'i' },
-      clubId: { $regex: `^${clubName}$`, $options: 'i' }
+      surName: { $regex: `^${surName}$`, $options: 'i' },
+      clubId
     });
 
     console.log('✅ Duplicate check result →', !!existingPlayer);
@@ -212,15 +291,153 @@ export const getPlayerById = async (req: AuthRequest, res: Response) => {
 };
 
 
+// UpdateSkillMatrix
 
+{/*
 
 export const updateSkillMatrix = async (req: AuthRequest, res: Response) => {
-  console.log('🔐 Decoded user (updateSkillMatrix):', req.user);
   try {
     const { id } = req.params;
     const { skillMatrix } = req.body;
-    console.log('📤 updateSkillMatrix - SkillMatrix received:', skillMatrix);
     const user = req.user;
+
+    console.log('📤 updateSkillMatrix - SkillMatrix received:', skillMatrix);
+
+    if (!user || ['Parent', 'Tournament Organiser'].includes(user.role)) {
+      return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+    }
+
+    const player = await Player.findById(id);
+    if (!player) return res.status(404).json({ message: 'Player not found' });
+
+    if (!skillMatrix || typeof skillMatrix !== 'object') {
+      return res.status(400).json({ message: 'Invalid skillMatrix payload' });
+    }
+
+    const updatedBy = player.coachName || user.fullName || user.clubName || 'Unknown';
+    const today = new Date().toISOString().split('T')[0];
+
+    const changedSkills: Record<string, Record<string, number>> = {};
+
+    for (const category in skillMatrix) {
+      const newSkills = skillMatrix[category];
+      for (const skill in newSkills) {
+        const newValue = newSkills[skill];
+        const currentValue = player.skillMatrix?.[category]?.[skill] ?? null;
+
+        if (newValue !== currentValue) {
+          if (!changedSkills[category]) changedSkills[category] = {};
+          changedSkills[category][skill] = newValue;
+        }
+      }
+    }
+
+    if (Object.keys(changedSkills).length === 0) {
+      return res.status(200).json({ message: 'No changes detected in skill matrix' });
+    }
+
+    // ✅ Merge new values into skillMatrix
+    const updatedSkillMatrix = { ...player.skillMatrix };
+
+    for (const category in changedSkills) {
+      if (!updatedSkillMatrix[category]) updatedSkillMatrix[category] = {};
+      for (const skill in changedSkills[category]) {
+        updatedSkillMatrix[category][skill] = changedSkills[category][skill];
+      }
+    }
+
+    // ✅ Save updated skillMatrix
+    player.skillMatrix = updatedSkillMatrix;
+
+    // ✅ Save skill change history
+    const skillsMap = new Map<string, Map<string, number>>();
+for (const category in changedSkills) {
+  const innerMap = new Map<string, number>();
+  for (const skill in changedSkills[category]) {
+    innerMap.set(skill, changedSkills[category][skill]);
+  }
+  skillsMap.set(category, innerMap);
+}
+
+// 🔁 Convert Map → Record<string, Record<string, number>>
+const plainChangedSkills: Record<string, Record<string, number>> = {};
+for (const [group, skillMap] of skillsMap.entries()) {
+  plainChangedSkills[group] = Object.fromEntries(skillMap.entries());
+}
+
+player.skillsHistory.push({
+  updatedBy,
+  date: today,
+  skills: plainChangedSkills,
+});
+
+
+
+    // ✅ Compute group averages
+    const newAverages: Record<string, number> = {};
+    for (const group in skillGroups) {
+      const skills = skillGroups[group];
+      const values = skills
+        .map(skill => updatedSkillMatrix[group]?.[skill])
+        .filter((v): v is number => v !== undefined);
+
+      if (values.length) {
+        const avg = values.reduce((a, b) => a + b, 0) / values.length;
+        newAverages[group] = parseFloat(avg.toFixed(2));
+      }
+    }
+
+    if (!player.skillGroupAverages) player.skillGroupAverages = [];
+
+    const existing = player.skillGroupAverages.find(entry => entry.date === today);
+    if (existing) {
+      existing.groupAverages = {
+        ...existing.groupAverages,
+        ...newAverages,
+      };
+    } else {
+      player.skillGroupAverages.push({
+        date: today,
+        groupAverages: newAverages,
+      });
+    }
+    console.log('📦 Final skillsHistory before save:', player.skillsHistory);
+    console.log('📦 Final skillMatrix before save:', player.skillMatrix);
+    console.log('📦 Final skillGroupAverages before save:', player.skillGroupAverages);
+    
+    // ✅ Save changes
+    await player.save();
+    const reloaded = await Player.findById(player._id);
+console.log('🔁 Reloaded Player skillsHistory:', reloaded?.skillsHistory);
+
+    // ✅ Log
+    await logAudit({
+      model: 'Player',
+      documentId: player._id,
+      action: 'update',
+      changedBy: user.fullName || user.email || 'Unknown',
+      role: user.role || 'Unknown',
+      context: 'Update Skill Matrix',
+      changes: changedSkills,
+    });
+
+    res.status(200).json({ message: '✅ Skill matrix updated successfully', player });
+  } catch (error) {
+    console.error('❌ Error updating skill matrix:', error);
+    res.status(500).json({ message: 'Server error updating skill matrix' });
+  }
+};
+
+*/}
+
+
+export const updateSkillMatrix = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { skillMatrix } = req.body;
+    const user = req.user;
+
+    console.log('📤 updateSkillMatrix - SkillMatrix received:', skillMatrix);
 
     if (!user || ['Parent', 'Tournament Organiser'].includes(user.role)) {
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
@@ -235,70 +452,120 @@ export const updateSkillMatrix = async (req: AuthRequest, res: Response) => {
 
     const updatedBy = player.coachName || user?.fullName || user?.clubName || 'Unknown';
     const today = new Date().toISOString().split('T')[0];
-    const changedSkills: Map<string, Map<string, number>> = new Map();
 
-    for (const category in skillMatrix) {
-      const newSkills = skillMatrix[category];
-      for (const skill in newSkills) {
-        const newValue = newSkills[skill];
-        const currentValue = player.skillMatrix?.get(category)?.get(skill) ?? null;
+    // 🧠 Merge skillMatrix and latest skillsHistory to get effective latestSkillMatrix
+    const latestSkillMatrix: Record<string, Record<string, number>> = {};
 
-        if (newValue !== currentValue) {
-          if (!changedSkills.has(category)) changedSkills.set(category, new Map());
-          changedSkills.get(category)!.set(skill, newValue);
+    // From existing skillMatrix
+    if (player.skillMatrix) {
+      for (const group in player.skillMatrix) {
+        latestSkillMatrix[group] = { ...player.skillMatrix[group] };
+      }
+    }
+
+    // Overwrite with latest from history (if available)
+    const latestHistory = player.skillsHistory?.[player.skillsHistory.length - 1];
+    if (latestHistory?.skills) {
+      for (const group in latestHistory.skills) {
+        if (!latestSkillMatrix[group]) latestSkillMatrix[group] = {};
+        for (const skill in latestHistory.skills[group]) {
+          latestSkillMatrix[group][skill] = latestHistory.skills[group][skill];
         }
       }
     }
 
-    if (changedSkills.size === 0) {
+    // 🧠 Detect changed values (even if decremented)
+    const changedSkills: Record<string, Record<string, number>> = {};
+    for (const group in skillMatrix) {
+      for (const skill in skillMatrix[group]) {
+        const newVal = skillMatrix[group][skill];
+        const oldVal = latestSkillMatrix[group]?.[skill] ?? null;
+        if (newVal !== oldVal) {
+          if (!changedSkills[group]) changedSkills[group] = {};
+          changedSkills[group][skill] = newVal;
+        }
+      }
+    }
+
+    if (Object.keys(changedSkills).length === 0) {
       return res.status(200).json({ message: 'No changes detected in skill matrix' });
     }
 
-    for (const [category, skillMap] of changedSkills.entries()) {
-      if (!player.skillMatrix.has(category)) {
-        player.skillMatrix.set(category, new Map());
-      }
-      const categoryMap = player.skillMatrix.get(category)!;
-      for (const [skill, value] of skillMap.entries()) {
-        categoryMap.set(skill, value);
+    // 🧠 Update the skillMatrix with changes
+    const updatedSkillMatrix: Record<string, Record<string, number>> = JSON.parse(JSON.stringify(latestSkillMatrix));
+    for (const group in changedSkills) {
+      if (!updatedSkillMatrix[group]) updatedSkillMatrix[group] = {};
+      for (const skill in changedSkills[group]) {
+        updatedSkillMatrix[group][skill] = changedSkills[group][skill];
       }
     }
 
-    const plainChangedSkills: Record<string, Record<string, number>> = {};
-    for (const [category, skillMap] of changedSkills.entries()) {
-      plainChangedSkills[category] = Object.fromEntries(skillMap);
-    }
+    player.skillMatrix = updatedSkillMatrix;
 
-    const historyEntry = {
+    // 📜 Append to history
+    player.skillsHistory.push({
       updatedBy,
       date: today,
-      skills: new Map(
-        Object.entries(plainChangedSkills).map(([category, skillsObj]) => [
-          category,
-          new Map(Object.entries(skillsObj))
-        ])
-      )
-    };
+      skills: changedSkills, // ✅ Must be plain object, not Map
+    });
 
-    player.skillsHistory.push(historyEntry);
+    // 📊 Update skillGroupAverages
+    const newAverages: Record<string, number> = {};
+    for (const group in skillGroups) {
+      const values = skillGroups[group]
+        .map(skill => updatedSkillMatrix[group]?.[skill])
+        .filter((v): v is number => v !== undefined);
+
+      if (values.length) {
+        newAverages[group] = parseFloat((values.reduce((a, b) => a + b, 0) / values.length).toFixed(2));
+      }
+    }
+
+    if (!player.skillGroupAverages) player.skillGroupAverages = [];
+
+    const existingEntry = player.skillGroupAverages.find(entry => entry.date === today);
+    if (existingEntry) {
+      existingEntry.groupAverages = { ...existingEntry.groupAverages, ...newAverages };
+    } else {
+      player.skillGroupAverages.push({ date: today, groupAverages: newAverages });
+    }
+
     await player.save();
 
     await logAudit({
-  model: 'Player',
-  documentId: player._id,
-  action: 'update',
-  changedBy: user?.fullName || user?.email || 'Unknown',
-  role: user?.role || 'Unknown',
-  context: 'Update Skill Matrix',
-  changes: plainChangedSkills
-});
+      model: 'Player',
+      documentId: player._id,
+      action: 'update',
+      changedBy: updatedBy,
+      role: user.role || 'Unknown',
+      context: 'Update Skill Matrix',
+      changes: changedSkills,
+    });
 
-    res.status(200).json({ message: 'Skill matrix updated successfully', player });
+    return res.status(200).json({ message: '✅ Skill matrix updated successfully', player });
   } catch (err) {
     console.error('❌ Error updating skill matrix:', err);
-    res.status(500).json({ message: 'Failed to update skill matrix' });
+    return res.status(500).json({ message: 'Server error updating skill matrix' });
   }
 };
+
+
+
+
+
+
+
+
+// GET /api/players/:id/skill-history
+export const getSkillHistory = async (req: Request, res: Response) => {
+  const player = await Player.findById(req.params.id);
+  if (!player) return res.status(404).json({ message: 'Player not found' });
+
+  return res.json({ history: player.skillsHistory });
+};
+
+
+
 
 // 🧩 GET /players/by-club
 
@@ -322,8 +589,8 @@ export const getPlayersByClub = async (req: AuthRequest, res: Response) => {
     console.log('✅ Club found:', club._id);
 
     const players = await Player.find({ clubId: club._id })
-      .select('firstName surname profilePicUrl')
-      .sort({ firstName: 1, surname: 1 });
+      .select('firstName surName profilePicUrl')
+      .sort({ firstName: 1, surName: 1 });
 
     console.log('✅ Players fetched:', players.length);
     return res.status(200).json(players);
@@ -347,30 +614,47 @@ export const markAttendance = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Invalid attendance data' });
     }
 
-    // 🔍 Resolve clubId from clubName
+    // 🔍 Get clubId from clubName
     const club = await Club.findOne({ name: req.user?.clubName });
     if (!club) {
       return res.status(404).json({ error: `Club '${req.user?.clubName}' not found` });
     }
 
-    const attendanceRecords = attendance.map(entry => ({
-      playerId: entry.playerId,
-      date: entry.date,
-      day: entry.day,        // 📝 Sent from frontend
-      type: entry.type,      // 'Club Night' or 'Tournament'
-      status: entry.status,  // 'Present' or 'Absent'
-      markedBy,
-      clubId: club._id,      // ✅ Correct ObjectId
-    }));
+    let upsertedCount = 0;
 
-    await Attendance.insertMany(attendanceRecords);
+    // ⏫ Loop through attendance entries and upsert
+    for (const entry of attendance) {
+      const filter = {
+        playerId: entry.playerId,
+        date: entry.date,
+        clubId: club._id,
+      };
 
-    return res.status(200).json({ message: 'Attendance saved successfully' });
+      const update = {
+        $set: {
+          day: entry.day,
+          type: entry.type,
+          status: entry.status,
+          markedBy,
+          clubId: club._id,
+        }
+      };
+
+      const result = await Attendance.updateOne(filter, update, { upsert: true });
+      if (result.upsertedCount > 0 || result.modifiedCount > 0) {
+        upsertedCount++;
+      }
+    }
+
+    return res.status(200).json({
+      message: `✅ Attendance updated for ${upsertedCount} player(s)`,
+    });
   } catch (error) {
-    console.error('🔥 Error saving attendance:', error);
+    console.error('🔥 Error upserting attendance:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
+
 
 //Save Match Hstory
 export const saveMatchHistory = async (req: AuthRequest, res: Response) => {
@@ -384,263 +668,42 @@ export const saveMatchHistory = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// GET /api/player/attendances?date=YYYY-MM-DD&clubId=xxxxx
+export const getPlayersWithAttendance = async (req: AuthRequest, res: Response) => {
 
-/*
-import { Request, Response } from 'express';
-import Player from '../control/models/Player';
-import { AuthRequest } from '../types/AuthRequest';
-
-const validSex = ['Male', 'Female'];
-const validPlayerTypes = ['Coaching only', 'Club Member', 'Coaching and Club Member'];
-const validClubRoles = [
-  'Club President', 'Club Secretary', 'Club Treasurer', 'Men\'s Team Captain',
-  'Women\'s Team Captain', 'Coach-Level 1', 'Coach-Level 2', 'Head Coach',
-  'Safeguarding Officer', 'First Aid Officer', 'Social Media & Marketing Officer'
-];
-const validLevels = ['Beginner', 'Intermediate', 'Advanced'];
-const validMembershipStatuses = ['Active', 'Inactive', 'Paused', 'Discontinued', 'Guest'];
-//const validFinancialStatuses = ['Payment Current', 'Payment Overdue'];
-const validPaymentStatuses = ['Paid', 'Due', 'Partial'];
-
-export const addPlayer = async (req: AuthRequest, res: Response) => {
+  console.log('📥 /api/player/attendances endpoint hit');
+console.log('➡️ Query params:', req.query);
   try {
-    const user = req.user;
-    console.log('Decoded user:', user);
+    const { date, clubId } = req.query;
+   
 
-    const {
-      firstName,
-      surName,
-      dob,
-      sex,
-      isJunior,
-      parentName,
-      parentPhone,
-      email,
-      emergencyContactname,
-      emergencyContactphonenumber,
-      joiningDate,
-      paymentStatus,
-      coachName,
-      membershipStatus,
-     // financialStatus,
-      level,
-      clubRoles,
-      playerType,
-      profileImage
-    } = req.body;
 
-    // Validation
-    if (!validSex.includes(sex)) return res.status(400).json({ message: `Invalid sex value: ${sex}` });
-    if (playerType && !validPlayerTypes.includes(playerType)) return res.status(400).json({ message: `Invalid playerType: ${playerType}` });
-    if (paymentStatus && !validPaymentStatuses.includes(paymentStatus)) return res.status(400).json({ message: `Invalid paymentStatus: ${paymentStatus}` });
-    if (membershipStatus && !validMembershipStatuses.includes(membershipStatus)) return res.status(400).json({ message: `Invalid membershipStatus: ${membershipStatus}` });
-   // if (financialStatus && !validFinancialStatuses.includes(financialStatus)) return res.status(400).json({ message: `Invalid financialStatus: ${financialStatus}` });
-    if (level && !validLevels.includes(level)) return res.status(400).json({ message: `Invalid level: ${level}` });
-    if (clubRoles && Array.isArray(clubRoles)) {
-      const invalidRoles = clubRoles.filter(role => !validClubRoles.includes(role));
-      if (invalidRoles.length > 0) return res.status(400).json({ message: `Invalid clubRoles: ${invalidRoles.join(', ')}` });
+    if (!date || !clubId) {
+      return res.status(400).json({ error: 'Missing required parameters: date or clubId' });
     }
 
-    const dobDate = new Date(dob);
-    const age = new Date().getFullYear() - dobDate.getFullYear();
+    const attendanceRecords = await Attendance.find({
+      date,
+      status: 'Present',
+      clubId,
+    }).populate('playerId');
 
-    const newPlayer = new Player({
-      firstName,
-      surName,
-      dob: dobDate,
-      sex,
-      isJunior,
-      isAdult: age >= 18,
-      parentName,
-      parentPhone,
-      email,
-      emergencyContactname,
-      emergencyContactphonenumber,
-      joinDate: new Date(joiningDate),
-      paymentStatus,
-      membershipStatus,
-      coachName,
-      //financialStatus,
-      level,
-      clubId: user?.clubName || 'Unknown',
-      clubRoles,
-      playerType,
-      profileImage
-    });
-
-    await newPlayer.save();
-    console.log('✅ Player saved:', newPlayer);
-    res.status(201).json({ message: 'Player created successfully', player: newPlayer });
-  } catch (error) {
-    console.error('❌ Add player error:', error);
-    res.status(500).json({ message: 'Failed to create player', error });
-  }
-};
-
-export const getPlayers = async (req: AuthRequest, res: Response) => {
-  try {
-    const user = req.user;
-    console.log('Decoded user:', user);
-
-    if (!user?.clubName) {
-      return res.status(400).json({ message: 'Missing club name in token' });
-    }
-
-    const players = await Player.find({ clubId: user.clubName });
-    console.log(`Found ${players.length} players for club: ${user.clubName}`);
+    const players = attendanceRecords
+      .filter((entry) => entry.playerId)
+      .map((entry) => {
+        const player = entry.playerId as any;
+        return {
+          id: player._id,
+          name: `${player.firstName} ${player.surName}`,
+          gender: player.sex,
+        };
+      });
 
     res.status(200).json(players);
   } catch (error) {
-    console.error('❌ Error fetching players:', error);
-    res.status(500).json({ message: 'Failed to fetch players' });
-  }
-};
-
-export const getPlayerById = async (req: AuthRequest, res: Response) => {
-  try {
-    console.log('Fetching player ID:', req.params.id);
-    const player = await Player.findById(req.params.id);
-    if (!player) return res.status(404).json({ message: 'Player not found' });
-    res.json(player);
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-export const updatePlayer = async (req: AuthRequest, res: Response) => {
-  try {
-    const { id } = req.params;
-    const updates = req.body;
-    console.log(`📥 Update request for player ${id}:`, updates);
-
-    if (updates.sex && !validSex.includes(updates.sex)) return res.status(400).json({ message: `Invalid sex value: ${updates.sex}` });
-    if (updates.playerType && !validPlayerTypes.includes(updates.playerType)) return res.status(400).json({ message: `Invalid playerType: ${updates.playerType}` });
-    if (updates.paymentStatus && !validPaymentStatuses.includes(updates.paymentStatus)) return res.status(400).json({ message: `Invalid paymentStatus: ${updates.paymentStatus}` });
-    if (updates.membershipStatus && !validMembershipStatuses.includes(updates.membershipStatus)) return res.status(400).json({ message: `Invalid membershipStatus: ${updates.membershipStatus}` });
-   // if (updates.financialStatus && !validFinancialStatuses.includes(updates.financialStatus)) return res.status(400).json({ message: `Invalid financialStatus: ${updates.financialStatus}` });
-    if (updates.level && !validLevels.includes(updates.level)) return res.status(400).json({ message: `Invalid level: ${updates.level}` });
-    if (updates.clubRoles && Array.isArray(updates.clubRoles)) {
-      const invalidRoles = updates.clubRoles.filter((role: string) => !validClubRoles.includes(role));
-
-      if (invalidRoles.length > 0) return res.status(400).json({ message: `Invalid clubRoles: ${invalidRoles.join(', ')}` });
-    }
-
-    const updated = await Player.findByIdAndUpdate(id, updates, { new: true });
-
-    if (!updated) return res.status(404).json({ message: 'Player not found' });
-
-    console.log('✅ Player updated successfully:', updated);
-    res.json(updated);
-  } catch (err) {
-    console.error('❌ Update error:', err);
-    res.status(500).json({ message: 'Failed to update player' });
-  }
-};
-
-export const deletePlayer = async (req: AuthRequest, res: Response) => {
-  try {
-    const { id } = req.params;
-    const deleted = await Player.findByIdAndDelete(id);
-
-    if (!deleted) return res.status(404).json({ message: 'Player not found' });
-
-    res.json({ message: 'Player deleted successfully' });
-  } catch (err) {
-    console.error('Delete error:', err);
-    res.status(500).json({ message: 'Failed to delete player' });
+    console.error('🔥 Error fetching attendance players:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance players' });
   }
 };
 
 
-
-// Update Skill Matrix Controller (Enhanced Grouped Skill Structure)
-
-export const updateSkillMatrix = async (req: AuthRequest, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { skillMatrix } = req.body;
-    const user = req.user;
-
-    if (!user || ['Parent', 'Tournament Organiser'].includes(user.role)) {
-      return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
-    }
-
-    const player = await Player.findById(id);
-    if (!player) return res.status(404).json({ message: 'Player not found' });
-
-    if (!skillMatrix || typeof skillMatrix !== 'object') {
-      return res.status(400).json({ message: 'Invalid skillMatrix payload' });
-    }
-
-    const updatedBy = player.coachName || user?.fullName || user?.clubName || 'Unknown';
-    const today = new Date().toISOString().split('T')[0];
-    const changedSkills: Map<string, Map<string, number>> = new Map();
-
-    for (const category in skillMatrix) {
-      const newSkills = skillMatrix[category];
-      for (const skill in newSkills) {
-        const newValue = newSkills[skill];
-        const currentValue = player.skillMatrix?.get(category)?.get(skill) ?? null;
-
-        if (newValue !== currentValue) {
-          if (!changedSkills.has(category)) changedSkills.set(category, new Map());
-          changedSkills.get(category)!.set(skill, newValue);
-        }
-      }
-    }
-
-    if (changedSkills.size === 0) {
-      return res.status(200).json({ message: 'No changes detected in skill matrix' });
-    }
-
-    for (const [category, skillMap] of changedSkills.entries()) {
-      if (!player.skillMatrix.has(category)) {
-        player.skillMatrix.set(category, new Map());
-      }
-      const categoryMap = player.skillMatrix.get(category)!;
-      for (const [skill, value] of skillMap.entries()) {
-        categoryMap.set(skill, value);
-      }
-    }
-
-    const plainChangedSkills: Record<string, Record<string, number>> = {};
-    for (const [category, skillMap] of changedSkills.entries()) {
-      plainChangedSkills[category] = Object.fromEntries(skillMap);
-    }
-
-    const historyEntry = {
-      updatedBy,
-      date: today,
-      skills: new Map(
-        Object.entries(plainChangedSkills).map(([category, skillsObj]) => [
-          category,
-          new Map(Object.entries(skillsObj))
-        ])
-      )
-    };
-
-    player.skillsHistory.push(historyEntry);
-    await player.save();
-
-    if (process.env.ENABLE_AUDIT_LOG === 'true') {
-      await AuditLog.create({
-        model: 'Player',
-        documentId: player._id,
-        action: 'update',
-        changedBy: user?.fullName || user?.email,
-        role: user?.role,
-        timestamp: new Date(),
-        context: 'Update Skill Matrix',
-        changes: plainChangedSkills
-      });
-    }
-
-    res.status(200).json({ message: 'Skill matrix updated successfully', player });
-  } catch (err) {
-    console.error('❌ Error updating skill matrix:', err);
-    res.status(500).json({ message: 'Failed to update skill matrix' });
-  }
-};
-
-
-*/

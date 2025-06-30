@@ -32,6 +32,8 @@ export default function PlayerAttendance() {
           },
         });
 
+        
+
         if (!res.ok) throw new Error('Failed to fetch players');
 
         const data: Player[] = await res.json();
@@ -73,9 +75,11 @@ export default function PlayerAttendance() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        body: JSON.stringify({ attendance: records }),
+        body: JSON.stringify({ attendance: records, clubId: localStorage.getItem('clubId') }),
       });
 
+  
+     
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || 'Failed to save attendance');

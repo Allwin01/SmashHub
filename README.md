@@ -180,6 +180,9 @@ npm install html2canvas jspdf
 npx shadcn-ui@latest add radio-group
 
 npx shadcn@latest add radio-group
+npm install react-chartjs-2 chart.js
+npm install html2pdf.js
+
 npm install date-fns
 npm install debug
 Troubleshooting 
@@ -196,4 +199,4 @@ git add filename.ext              # Stage specific file
 git add folder/                   # Stage specific folder
 
 git commit -m "crated pegboard,Player attendance and Skill View export"
-git push origin branch-name
+git push origin main

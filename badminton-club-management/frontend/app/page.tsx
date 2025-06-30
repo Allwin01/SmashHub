@@ -33,8 +33,12 @@ export default function LoginPage() {
         const role = result.user.role;
 
         // ✅ Store the JWT token
-        localStorage.setItem('token', result.token);
-        localStorage.setItem('clubName', result.clubName || result.user?.clubName || '');
+         // ✅ Store the JWT token and club info
+  localStorage.setItem('token', result.token);
+  localStorage.setItem('clubId', result.user.clubId); 
+  localStorage.setItem('clubName', result.clubName || result.user?.clubName || '');
+
+
         console.log('Returned token:', result.token);  
         switch (role) {
           case 'SuperAdmin':
