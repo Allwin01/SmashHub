@@ -14,6 +14,11 @@ import playerRoutes from './control/routes/playerRoutes';
 import { authenticateJWT } from './control/middleware/authenticateJWT';
 import coachRoutes from './control/routes/coach';
 import emailReportRoute from './control/routes/emailReports';
+import matchHistoryRoutes from './control/routes/matchHistory';
+import matchSummaryRoutes from './control/routes/matchSummary';
+import attendanceRoutes from './control/routes/attendance';
+import userthemeRoutes from './control/routes/usertheme';
+
 
 
 
@@ -44,6 +49,12 @@ app.use('/api/clubs', clubRoutes);
 app.use('/api/players', authenticateJWT, playerRoutes);
 app.use('/api/coaches', coachRoutes);
 app.use('/api', emailReportRoute);
+
+app.use('/api', matchHistoryRoutes);
+app.use('/api/matchSummary', matchSummaryRoutes); 
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/user', userthemeRoutes);
+
 
 
 // 🔌 MongoDB Connection

@@ -1,78 +1,83 @@
-/*// ClubAdminDashboard.tsx
-'use client';
-
-import React from 'react';
-
-export default function ClubAdminDashboard() {
-  return (
-    <div className="p-6 text-center text-2xl font-bold text-blue-700">
-      ✅ Club Admin Dashboard is working!
-    </div>
-  );
-}
-
-*/
 
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Card, CardContent } from '@/components/ui/card';
+
+import { useState, useEffect } from 'react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Home, UserPlus, Users, BarChart2, CalendarCheck2 } from 'lucide-react';
+import { Select, SelectTrigger, SelectContent, SelectItem } from '@/components/ui/select';
+import { Card, CardContent } from '@/components/ui/card';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { MultiSelect } from '@/components/ui/multiselect';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { Users, User, User2,UserRound, Venus, Mars,Info } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-export default function ClubAdminDashboard() {
-  const [clubName, setClubName] = useState('');
-  const router = useRouter();
 
+
+
+  const [stats, setStats] = useState({
+    totalMembers: 0,
+    juniors: 0,
+    adults: 0,
+    males: 0,
+    females: 0
+  });
+  
   useEffect(() => {
-    // Fetch club info from API or token/session storage
-    const storedClub = localStorage.getItem('clubName');
-    if (storedClub) {
-      setClubName(storedClub);
-    }
+    const fetchStats = async () => {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:5050/api/players', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+  
+      const totalPlayers = data.length;
+      const juniors = data.filter(p => p.isJunior).length;
+      const adults = totalPlayers - juniors;
+      const males = data.filter(p => p.sex === 'Male').length;
+      const females = data.filter(p => p.sex === 'Female').length;
+  
+      setStats({ totalMembers: totalPlayers, juniors, adults, males, females });
+    };
+  
+    fetchStats();
   }, []);
+  
+  const StatCard = ({ label, value, icon, color }: { label: string, value: number | string, icon: React.ReactNode, color: string }) => (
+    <div className={`rounded-xl shadow-md p-4 flex items-center gap-4 ${color}`}>
+      <div className="bg-white rounded-full p-6 shadow-sm">{icon}</div>
+      <div>
+      <h4 className="text-4xl font-bold text-gray-900">{label}</h4>
 
-  const navItems = [
-    { label: 'Home', icon: Home, route: '/club-admin/home' },
-    { label: 'Add Player', icon: UserPlus, route: '/club-admin/add-player' },
-    { label: 'Player Card', icon: Users, route: '/club-admin/player-card' },
-    { label: 'Smart Pegboard', icon: BarChart2, route: '/club-admin/pegboard' },
-    { label: 'Organise Tournament', icon: CalendarCheck2, route: '/club-admin/tournament' },
-  ];
-
-  return (
-    <div className="min-h-screen bg-blue-50 p-6">
-      <motion.h1
-        className="text-3xl font-bold text-center text-blue-800 mb-6"
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        Welcome to {clubName || 'Club'} Admin Dashboard
-      </motion.h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {navItems.map((item) => (
-          <motion.div
-            key={item.label}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <Card
-              className="cursor-pointer hover:shadow-xl transition-shadow"
-              onClick={() => router.push(item.route)}
-            >
-              <CardContent className="p-6 flex flex-col items-center text-center">
-                <item.icon size={40} className="text-blue-700 mb-4" />
-                <p className="text-lg font-semibold text-blue-900">{item.label}</p>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
+        <p className="text-4xl font-bold text-gray-900">{value}</p>
       </div>
     </div>
   );
-}
+
+ 
+  
+     
+
+
+
+
+  return (
+    <div className="p-6 w-full">
+      <ToastContainer position="top-right" autoClose={2000} />
+
+         {/* Player Statistics */}
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard label="Total Members" value={stats.totalMembers} icon={<Users className="w-12 h-12 text-blue-600" />} />
+        <StatCard label="Junior : Adult" value={`${stats.juniors} / ${stats.adults}`} icon={<Users className="w-12 h-12 text-green-600" />} />
+        <StatCard label="Male : Female" value={`${stats.males} / ${stats.females}`} icon={<Users className="w-12 h-12 text-pink-500" />} />
+      </div>
+   
+      </div>
+  
+  );
 
 

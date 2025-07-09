@@ -9,6 +9,14 @@ module.exports = {
   "./components/**/*.{js,ts,jsx,tsx}"],
   theme: {
   	extend: {
+		fontFamily: {
+			sans: 
+			['var(--font-poppins)', 'sans-serif',
+			'var(--font-fredoka)', 'sans-serif',
+			'var(--font-nunito)', 'sans-serif',
+			'var(--font-quicksand)', 'sans-serif',
+		],
+		  },
   		colors: {
   			darkBlue: '#0A1F44',
   			midBlue: '#1B2A52',

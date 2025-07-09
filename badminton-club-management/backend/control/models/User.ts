@@ -22,6 +22,9 @@ name: string;
 address: string;
 city: string;
 };
+preferences?: {
+    sidebarColor?: string;
+  };
 comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -40,6 +43,9 @@ postcode: { type: String, required: true },
 county: { type: String, required: true },
 country: { type: String, required: true },
 },
+preferences: {
+    sidebarColor: { type: String, default: 'blue' },
+  },
 selectedClub: { type: String }, 
 // 👪 For Parents
 club: {
@@ -47,10 +53,15 @@ name: String,
 address: String,
 city: String,
 }, 
+
+
+
 // 🏸 For Admin/Coach
 }, {
 timestamps: true,
-});
+}
+
+);
 
 // 🛡️ Hash password before saving
 UserSchema.pre<IUser>('save', async function (next) {

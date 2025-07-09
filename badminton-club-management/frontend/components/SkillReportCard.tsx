@@ -1,4 +1,3 @@
-// components/VisualSkillReport.tsx
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -30,6 +29,8 @@ ChartJS.register(
   Tooltip,
   Legend
 );
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const skillGroups: Record<string, string[]> = {
   'Movement Phases': ['Split-Step', 'Chasse Step', 'Lunging', 'Jumping'],
@@ -40,10 +41,25 @@ const skillGroups: Record<string, string[]> = {
   'Footwork & Speed': ['6-Corner Footwork', 'Shadow Footwork', 'Pivot & Rotation', 'Recovery Steps'],
 };
 
-const getLevelLabel = (value: number): string => {
-  const badge = value > 7 ? '🥇' : value >= 5 ? '🥈' : '🥉';
-  const label = value > 7 ? 'Advanced Level' : value >= 5 ? 'Intermediate Level' : 'Beginner Level';
-  return `${label} ${badge}`;
+const getLevelLabel = (value: number): JSX.Element => {
+  let label = 'Beginner';
+  let badge = '🥉';
+
+  if (value >= 7) {
+    label = 'Advanced';
+    badge = '🥇';
+  } else if (value >= 5) {
+    label = 'Intermediate';
+    badge = '🥈';
+  }
+
+  const level = value % 1 >= 0.5 ? Math.ceil(value) : Math.floor(value);
+
+  return (
+    <span className="font-semibold">
+      Lvl {level} – {label}
+    </span>
+  );
 };
 
 interface SkillProgressVisualProps {
@@ -56,17 +72,52 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
   const [lineData, setLineData] = useState<any>({});
   const [coachComment, setCoachComment] = useState(player.comments || '');
   const reportRef = useRef<HTMLDivElement>(null);
+  const [updatedPlayer, setPlayer] = useState(player);
+  const isExporting = useRef(false);
+
+  {/*
+  const groupColors = [
+    'bg-indigo-600',   // Movement Phases
+    'bg-red-600',      // Grips & Grip Positions
+    'bg-amber-500',    // Forehand Strokes
+    'bg-emerald-500',  // Backhand Strokes
+    'bg-violet-600',   // Serve Techniques
+    'bg-orange-500',   // Footwork & Speed
+  ];
+
+
+  const barColors = [
+    '#4f46e5', // Movement Phases – Indigo
+    '#dc2626', // Grips & Grip Positions – Red
+    '#f59e0b', // Forehand Strokes – Amber
+    '#10b981', // Backhand Strokes – Emerald
+    '#8b5cf6', // Serve Techniques – Violet
+    '#f97316', // Footwork & Speed – Orange
+  ];
+
+*/}
 
   const groupColors = [
     'bg-blue-200', 'bg-teal-200', 'bg-orange-200', 'bg-red-200', 'bg-yellow-200', 'bg-purple-200',
   ];
   const barColors = ['#3b82f6', '#0d9488', '#ea580c', '#dc2626', '#eab308', '#9333ea'];
-  const radarColors = ['54, 162, 235', '255, 99, 132', '255, 206, 86', '75, 192, 192', '153, 102, 255', '255, 159, 64'];
+
+  
+
+  const radarColors = [
+    '79, 70, 229',   // Indigo
+    '220, 38, 38',   // Red
+    '245, 158, 11',  // Amber
+    '16, 185, 129',  // Emerald
+    '139, 92, 246',  // Violet
+    '249, 115, 22',  // Orange
+  ];
+  
 
   useEffect(() => {
-    if (!player) return;
+    if (!updatedPlayer) return;
 
-    const matrix = player.skillMatrix || {};
+    const matrix = updatedPlayer.skillMatrix || {};
     const averages: { name: string; value?: number }[] = [];
 
     for (const groupName in skillGroups) {
@@ -90,114 +141,64 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
 
     setGroupedAverages(averages);
 
-    const history = [...(player.skillsHistory || [])]
-      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .slice(-4);
+    const dates = updatedPlayer.skillGroupAverages?.map((entry: any) => entry.date) || [];
+    const lineDatasets = Object.keys(skillGroups).map((group, i) => ({
+      label: group,
+      data: updatedPlayer.skillGroupAverages.map((entry: any) => entry.groupAverages?.[group] ?? 0),
+      borderColor: barColors[i % barColors.length],
+      backgroundColor: 'transparent',
+      spanGaps: true,
+    }));
+    setLineData({ labels: dates, datasets: lineDatasets });
+  }, [updatedPlayer]);
 
-    const groupedRadar: Record<string, Record<string, Record<string, number>>> = {};
-    const radarDates: string[] = [];
-    const lastKnownSkillValues: Record<string, Record<string, number>> = {};
-
-    history.forEach((entry: any) => {
-      const { date, skills } = entry;
-      radarDates.push(date);
-
-      for (const group in skillGroups) {
-        if (!groupedRadar[group]) groupedRadar[group] = {};
-        if (!groupedRadar[group][date]) groupedRadar[group][date] = {};
-        if (!lastKnownSkillValues[group]) lastKnownSkillValues[group] = {};
-
-        for (const skill of skillGroups[group]) {
-          const value = skills[group]?.[skill];
-          if (value !== undefined) {
-            lastKnownSkillValues[group][skill] = value;
-          }
-          groupedRadar[group][date][skill] = lastKnownSkillValues[group][skill] ?? 0;
-        }
-      }
-    });
-
-    const lineDatasets = Object.keys(skillGroups).map((group, i) => {
-      const data = radarDates.map(date => {
-        const skillValues = skillGroups[group].map(skill => groupedRadar[group]?.[date]?.[skill] ?? 0);
-        const avg = skillValues.reduce((a, b) => a + b, 0) / skillValues.length;
-        return parseFloat(avg.toFixed(2));
-      });
-
-      return {
-        label: group,
-        data,
-        borderColor: barColors[i % barColors.length],
-        backgroundColor: 'transparent',
-        spanGaps: true,
-      };
-    });
-
-    setLineData({ labels: radarDates, datasets: lineDatasets });
-  }, [player]);
-
-  const handlePDFExport = async () => {
-    const controls = document.getElementById('controls');
-    if (controls) controls.classList.add('hidden');
-    const html2pdf = (await import('html2pdf.js')).default;
-    setTimeout(() => {
-      if (reportRef.current) {
-        html2pdf().set({
-          margin: 0.2,
-          filename: `${player?.firstName}_SkillReport.pdf`,
-          html2canvas: { scale: 2 },
-          pagebreak: { mode: 'avoid-all' },
-        }).from(reportRef.current).save().then(() => {
-          if (controls) controls.classList.remove('hidden');
-        });
-      }
-    }, 300);
-  };
-
-  const handleSaveComment = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5050/api/players/${player._id}/comments`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ comment: coachComment }),
-      });
-      if (!res.ok) throw new Error('Failed to save comment');
-      alert('✅ Coach comment saved successfully!');
-    } catch (err) {
-      console.error(err);
-      alert('❌ Error saving comment');
-    }
-  };
-
-  if (!player) return <div className="p-6">Loading...</div>;
  
+
+  useEffect(() => {
+    const refreshPlayerData = async () => {
+      const token = localStorage.getItem('token');
+      const playerId = player?._id;
+      if (!playerId || !token) return;
+      try {
+        const refreshed = await fetch(`/api/players/${playerId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const freshData = await refreshed.json();
+        setPlayer(freshData);
+      } catch (err) {
+        console.error('Error fetching updated player:', err);
+      }
+    };
+    refreshPlayerData();
+  }, [player._id]);
+
+
+
+
+  
+  
+  
+
+  if (!updatedPlayer) return <div className="p-6">Loading...</div>;
+
   return (
     <div ref={reportRef} className={`p-6 space-y-6 text-sm ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-white text-black'}`}>
-      <div className="text-blue-900 text-xl font-bold uppercase tracking-wide">{player.clubName}</div>
-  
-      <div className="flex justify-between items-center" id="controls">
-        <h2 className="text-3xl font-bold">Badminton Skill Progress Report</h2>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>Toggle Theme</Button>
-          <Button onClick={handlePDFExport}>📥 Export PDF</Button>
-        </div>
+      <div className="text-blue-900 text-xl font-bold uppercase tracking-wide">{updatedPlayer.clubName}</div>
+  <div className="flex justify-between items-center" id="controls">
+    <h2 className="text-3xl font-bold">Badminton Skill Progress Report</h2>
+    <div className="flex gap-2">  
+    </div>
       </div>
-  
-      {/* Player Profile */}
+      {/* Profile */}
       <div className="flex items-center gap-6">
-        <Image src={player.profileImage || '/Avatar-female.png'} alt={player.firstName} width={96} height={96} className="rounded-full border" />
+        <Image src={updatedPlayer.profileImage || '/Avatar-female.png'} alt={updatedPlayer.firstName} width={72} height={72} className="rounded-full border" />
         <div>
-          <h2 className="text-2xl font-bold">{player.firstName} {player.surName}</h2>
-          <p className="text-base">Level: {player.level || 'N/A'}</p>
-          <p className="text-base">Coach: {player.coachName || 'N/A'}</p>
+          <h2 className="text-2xl font-bold">{updatedPlayer.firstName} {updatedPlayer.surName}</h2>
+          <p className="text-base">Level: {updatedPlayer.level || 'N/A'}</p>
+          <p className="text-base">Coach: {updatedPlayer.coachName || 'N/A'}</p>
         </div>
       </div>
-  
-      {/* Skill Cards */}
+
       <Card>
         <CardHeader><CardTitle className="text-xl">Skill Cards</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -210,77 +211,71 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
                     <div className="h-2 rounded" style={{ width: `${group.value * 10}%`, backgroundColor: barColors[i % barColors.length] }} />
                   </div>
                   <div className="text-sm font-medium mt-2 flex items-center gap-2 text-black">
-                    <span className="text-2xl font-bold">{getLevelLabel(group.value)}</span>
+                   {getLevelLabel(group.value)}
                   </div>
                 </>
-              ) : <p className="text-sm text-red-200 italic">🚫 No data recorded</p>}
+              ) : <p className="text-sm text-red-400 italic">🚫 No data recorded</p>}
             </div>
           ))}
         </CardContent>
       </Card>
-  
-     {/* Radar Charts */}
-<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-4">
-  {Object.entries(skillGroups).map(([groupName, skills], i) => {
-    const latestEntry = player.skillsHistory?.[player.skillsHistory.length - 1];
-    const latestDate = latestEntry?.date || '';
-    const latestSkills = latestEntry?.skills?.[groupName] || {};
+             
 
-    const datasets = [
-      {
-        label: `Snapshot on ${latestDate}`,
-        data: skills.map(skill => latestSkills?.[skill] ?? 0),
-        backgroundColor: `rgba(${radarColors[i % radarColors.length]}, 0.2)`,
-        borderColor: `rgba(${radarColors[i % radarColors.length]}, 1)`,
-        borderWidth: 2,
-      },
-    ];
-
-    return (
-      <div key={groupName} className="bg-white p-4 rounded shadow">
-        <h4 className="text-base font-medium text-center mb-1">{groupName}</h4>
-        <div className="h-80">
-          <Radar
-            data={{ labels: skills, datasets }}
-            options={{
-              responsive: true,
-              plugins: {
-                legend: {
-                  display: true,
-                  position: 'top',
-                  labels: {
-                    font: { size: 10 },
-                    color: theme === 'dark' ? '#ffffff' : '#000000',
-                  },
-                },
-                tooltip: {
-                  callbacks: {
-                    label: (context: any) =>
-                      `${context.dataset.label}: ${context.formattedValue}`,
-                  },
-                },
-              },
-              scales: {
-                r: {
-                  ticks: { display: false },
-                  pointLabels: {
-                    font: { size: 10 },
-                    color: theme === 'dark' ? '#ffffff' : '#000000',
-                  },
-                  grid: {
-                    color: theme === 'dark' ? '#4b5563' : '#d1d5db',
-                  },
-                },
-              },
-            }}
-          />
-        </div>
+      {/* Radar Charts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-4">
+        {Object.entries(skillGroups).map(([groupName, skills], i) => {
+          const trimmedLabels = skills.map(skill => skill.replace(/\s*\(.*?\)\s*/g, '').trim());
+          const values = skills.map(skill => updatedPlayer.skillMatrix?.[groupName]?.[skill] ?? 0);
+          return (
+            <div key={groupName} className="bg-white p-4 rounded shadow">
+              <h4 className="text-lg font-bold text-center mb-2">{groupName}</h4>
+              <div className="h-[300px] w-full">
+                <Radar
+                  data={{
+                    labels: trimmedLabels,
+                    datasets: [{
+                      label: 'Current Skill Level',
+                      data: values,
+                      backgroundColor: `rgba(${radarColors[i % radarColors.length]}, 0.2)`,
+                      borderColor: `rgba(${radarColors[i % radarColors.length]}, 1)`,
+                      borderWidth: 2,
+                    }],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                        callbacks: {
+                          label: (context: any) => `${context.dataset.label}: ${context.formattedValue}`,
+                        },
+                      },
+                    },
+                    scales: {
+                      r: {
+                        min: 0,
+                        max: 10,
+                        ticks: { display: false },
+                        pointLabels: {
+                          font: { size: 12, weight: '600' },
+                          color: theme === 'dark' ? '#ffffff' : '#000000',
+                          callback: function (label: string) {
+                            const words = label.split(' ');
+                            return words.length > 1 ? [words[0], words.slice(1).join(' ')] : label;
+                          },
+                        },
+                        grid: { color: theme === 'dark' ? '#4b5563' : '#d1d5db' },
+                      },
+                    },
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
-    );
-  })}
-</div>
 
-  
       {/* Line Chart */}
       <div className="bg-white p-4 rounded shadow h-[400px]">
         <h4 className="text-lg font-semibold text-center mb-2">Skill Progress Over Time</h4>
@@ -296,11 +291,6 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
                   labels: {
                     font: { size: 12 },
                     color: theme === 'dark' ? '#fff' : '#000',
-                  },
-                },
-                tooltip: {
-                  callbacks: {
-                    label: (context) => `${context.dataset.label}: ${context.raw}`,
                   },
                 },
               },
@@ -331,18 +321,10 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
           <p className="text-gray-400 text-center py-4">No data available</p>
         )}
       </div>
-  
-      {/* Coach Comments */}
-      <Card>
-        <CardHeader><CardTitle>Coach Comments</CardTitle></CardHeader>
-        <CardContent>
-          <textarea className="w-full p-2 border rounded text-black" rows={3} placeholder="Add coach comments..." value={coachComment} onChange={e => setCoachComment(e.target.value)} />
-          <Button className="mt-3" onClick={handleSaveComment}>💾 Save Comments</Button>
-        </CardContent>
-      </Card>
+
+   
     </div>
   );
-  };
+};
 
-  // ✅ Highlighted Fix:
-  export default SkillProgressVisual;
+export default SkillProgressVisual;

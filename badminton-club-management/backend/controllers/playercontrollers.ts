@@ -6,7 +6,7 @@ import { AuthRequest } from '../types/AuthRequest';
 import { logAudit } from '../control/utils/auditLogger';
 import Attendance from '../control/models/Attendance';
 import Club from '../control/models/Club';
-import MatchHistory from '../control/models/MatchHistory';
+
 
 const validSex = ['Male', 'Female'];
 const validPlayerTypes = ['Coaching only', 'Club Member', 'Coaching and Club Member'];
@@ -589,7 +589,8 @@ export const getPlayersByClub = async (req: AuthRequest, res: Response) => {
     console.log('✅ Club found:', club._id);
 
     const players = await Player.find({ clubId: club._id })
-      .select('firstName surName profilePicUrl')
+    .select('firstName surName profilePicUrl playerType coachName clubRoles')
+
       .sort({ firstName: 1, surName: 1 });
 
     console.log('✅ Players fetched:', players.length);
@@ -656,17 +657,8 @@ export const markAttendance = async (req: AuthRequest, res: Response) => {
 };
 
 
-//Save Match Hstory
-export const saveMatchHistory = async (req: AuthRequest, res: Response) => {
-  try {
-    const history = new MatchHistory(req.body);
-    await history.save();
-    res.status(201).json({ message: 'Match history saved' });
-  } catch (err) {
-    console.error('❌ Error saving match history:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-};
+
+
 
 // GET /api/player/attendances?date=YYYY-MM-DD&clubId=xxxxx
 export const getPlayersWithAttendance = async (req: AuthRequest, res: Response) => {
@@ -696,6 +688,7 @@ console.log('➡️ Query params:', req.query);
           id: player._id,
           name: `${player.firstName} ${player.surName}`,
           gender: player.sex,
+          status: entry.status, 
         };
       });
 
@@ -706,4 +699,62 @@ console.log('➡️ Query params:', req.query);
   }
 };
 
+
+//  
+export const getAttendanceByDate = async (req: Request, res: Response) => {
+  const { clubId, date } = req.query;
+
+  console.log('📥 Incoming GET /players/attendance request:', { clubId, date });
+
+  if (!clubId || !date) {
+    console.warn('⚠️ Missing clubId or date');
+    return res.status(400).json({ error: 'Missing clubId or date' });
+  }
+
+  try {
+    const records = await Attendance.find({ clubId, date });
+    console.log(`✅ Found ${records.length} attendance records for ${date}`);
+    res.json(records);
+  } catch (err) {
+    console.error('❌ Error retrieving attendance:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+
+
+// PUT /api/players/:id/comments
+export const updateCoachComment = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { comment } = req.body;
+
+    const player = await Player.findByIdAndUpdate(
+      id,
+      { $set: { coachComment: comment } },
+      { new: true }
+    );
+
+    if (!player) return res.status(404).json({ message: 'Player not found' });
+
+    res.status(200).json({ message: 'Coach comment updated', player });
+  } catch (err) {
+    console.error('❌ Error updating comment:', err);
+    res.status(500).json({ message: 'Server error saving comment' });
+  }
+};
+
+
+// GET /api/players/:id/comment
+export const getCoachComment = async (req: AuthRequest, res: Response) => {
+  try {
+    const player = await Player.findById(req.params.id).select('coachComment');
+    if (!player) return res.status(404).json({ message: 'Player not found' });
+
+    res.status(200).json({ coachComment: player.coachComment || '' });
+  } catch (error) {
+    console.error('❌ Error fetching coach comment:', error);
+    res.status(500).json({ message: 'Server error fetching coach comment' });
+  }
+};
 

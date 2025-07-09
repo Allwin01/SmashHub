@@ -11,6 +11,9 @@ export interface AuthPayload {
   firstName?: string; 
   surname?: string; 
 fullName?: string; 
+[key: string]: any;
+
+
   }
   
  

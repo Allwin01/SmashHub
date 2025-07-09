@@ -30,6 +30,7 @@ ChartJS.register(
   Legend
 );
 
+
 const skillGroups: Record<string, string[]> = {
   'Movement Phases': ['Split-Step', 'Chasse Step', 'Lunging', 'Jumping'],
   'Grips & Grip Positions': ['Basic Grip', 'Panhandle', 'Bevel', 'Thumb Grip', 'Grip Adjustment'],
@@ -71,6 +72,7 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
   const [coachComment, setCoachComment] = useState(player.comments || '');
   const reportRef = useRef<HTMLDivElement>(null);
   const [updatedPlayer, setPlayer] = useState(player);
+  const isExporting = useRef(false);
 
   {/*
   const groupColors = [
@@ -149,42 +151,7 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
     setLineData({ labels: dates, datasets: lineDatasets });
   }, [updatedPlayer]);
 
-  const handlePDFExport = async () => {
-    const controls = document.getElementById('controls');
-    if (controls) controls.classList.add('hidden');
-    const html2pdf = (await import('html2pdf.js')).default;
-    setTimeout(() => {
-      if (reportRef.current) {
-        html2pdf().set({
-          margin: 0.2,
-          filename: `${updatedPlayer?.firstName}_SkillReport.pdf`,
-          html2canvas: { scale: 2 },
-          pagebreak: { mode: 'avoid-all' },
-        }).from(reportRef.current).save().then(() => {
-          if (controls) controls.classList.remove('hidden');
-        });
-      }
-    }, 300);
-  };
-
-  const handleSaveComment = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5050/api/players/${updatedPlayer._id}/comments`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ comment: coachComment }),
-      });
-      if (!res.ok) throw new Error('Failed to save comment');
-      alert('✅ Coach comment saved successfully!');
-    } catch (err) {
-      console.error(err);
-      alert('❌ Error saving comment');
-    }
-  };
+ 
 
   useEffect(() => {
     const refreshPlayerData = async () => {
@@ -204,57 +171,32 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
     refreshPlayerData();
   }, [player._id]);
 
+
+
+
+  
+  
+  
+
   if (!updatedPlayer) return <div className="p-6">Loading...</div>;
 
   return (
     <div ref={reportRef} className={`p-6 space-y-6 text-sm ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-white text-black'}`}>
       <div className="text-blue-900 text-xl font-bold uppercase tracking-wide">{updatedPlayer.clubName}</div>
-
-      <div className="flex justify-between items-center" id="controls">
-        <h2 className="text-3xl font-bold">Badminton Skill Progress Report</h2>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>Toggle Theme</Button>
-          <Button onClick={handlePDFExport}>📥 Export PDF</Button>
-        </div>
+  <div className="flex justify-between items-center" id="controls">
+    <h2 className="text-3xl font-bold">Badminton Skill Progress Report</h2>
+    <div className="flex gap-2">  
+    </div>
       </div>
-
       {/* Profile */}
       <div className="flex items-center gap-6">
-        <Image src={updatedPlayer.profileImage || '/Avatar-female.png'} alt={updatedPlayer.firstName} width={96} height={96} className="rounded-full border" />
+        <Image src={updatedPlayer.profileImage || '/Avatar-female.png'} alt={updatedPlayer.firstName} width={72} height={72} className="rounded-full border" />
         <div>
           <h2 className="text-2xl font-bold">{updatedPlayer.firstName} {updatedPlayer.surName}</h2>
           <p className="text-base">Level: {updatedPlayer.level || 'N/A'}</p>
           <p className="text-base">Coach: {updatedPlayer.coachName || 'N/A'}</p>
         </div>
       </div>
-
-      {/* Skill Cards */}
-
-      {/*
-
-      <Card>
-        <CardHeader><CardTitle className="text-xl">Skill Cards</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          {groupedAverages.map((group, i) => (
-            <div key={group.name} className={`${groupColors[i % groupColors.length]} bg-white p-4 rounded-lg aspect-[1/1.2] max-h-48 flex flex-col justify-between`}>
-              <h4 className="font-semibold mb-1 text-black text-sm sm:text-base">{group.name}</h4>
-              {group.value !== undefined ? (
-                <>
-                  <div className="w-full h-2 bg-gray-200 rounded">
-                    <div className="h-2 rounded" style={{ width: `${group.value * 10}%`, backgroundColor: barColors[i % barColors.length] }} />
-                  </div>
-                  <div className="text-sm font-medium mt-2 flex items-center gap-2 text-black">
-                    {getLevelLabel(group.value)}
-                  </div>
-                </>
-              ) : <p className="text-sm text-red-400 italic">🚫 No data recorded</p>}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-    */}
-
 
       <Card>
         <CardHeader><CardTitle className="text-xl">Skill Cards</CardTitle></CardHeader>
@@ -379,20 +321,7 @@ const SkillProgressVisual: React.FC<SkillProgressVisualProps> = ({ player }) => 
         )}
       </div>
 
-      {/* Comments */}
-      <Card>
-        <CardHeader><CardTitle>Coach Comments</CardTitle></CardHeader>
-        <CardContent>
-          <textarea
-            className="w-full p-2 border rounded text-black"
-            rows={3}
-            placeholder="Add coach comments..."
-            value={coachComment}
-            onChange={e => setCoachComment(e.target.value)}
-          />
-          <Button className="mt-3" onClick={handleSaveComment}>💾 Save Comments</Button>
-        </CardContent>
-      </Card>
+   
     </div>
   );
 };

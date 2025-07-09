@@ -1,7 +1,8 @@
 
 'use client';
 
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,10 @@ import { motion } from 'framer-motion';
 import { MultiSelect } from '@/components/ui/multiselect';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { Users, User, User2,UserRound, Venus, Mars,Info } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+
 
 export default function AddPlayerPage() {
   const router = useRouter();
@@ -37,7 +42,44 @@ export default function AddPlayerPage() {
 
   const [errors, setErrors] = useState<any>({});
   const [isDuplicate, setIsDuplicate] = useState(false);
+  const [stats, setStats] = useState({
+    totalMembers: 0,
+    juniors: 0,
+    adults: 0,
+    males: 0,
+    females: 0
+  });
+  
+  useEffect(() => {
+    const fetchStats = async () => {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:5050/api/players', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+  
+      const totalPlayers = data.length;
+      const juniors = data.filter(p => p.isJunior).length;
+      const adults = totalPlayers - juniors;
+      const males = data.filter(p => p.sex === 'Male').length;
+      const females = data.filter(p => p.sex === 'Female').length;
+  
+      setStats({ totalMembers: totalPlayers, juniors, adults, males, females });
+    };
+  
+    fetchStats();
+  }, []);
+  
+  const StatCard = ({ label, value, icon, color }: { label: string, value: number | string, icon: React.ReactNode, color: string }) => (
+    <div className={`rounded-xl shadow-md p-4 flex items-center gap-4 ${color}`}>
+      <div className="bg-white rounded-full p-6 shadow-sm">{icon}</div>
+      <div>
+      <h4 className="text-4xl font-bold text-gray-900">{label}</h4>
 
+        <p className="text-4xl font-bold text-gray-900">{value}</p>
+      </div>
+    </div>
+  );
 
   // Duplicte check 
 
@@ -182,7 +224,7 @@ export default function AddPlayerPage() {
       if (response.ok) {
         toast.success('✅ Player added successfully', {
           onClose: () => router.push('/dashboard/clubadmin'),
-          autoClose: 3000
+          autoClose: 2000
         });
       } else {
         throw new Error('Failed to save player');
@@ -211,12 +253,31 @@ export default function AddPlayerPage() {
   ];
 
 
+
+
   return (
     <div className="p-6 w-full">
-      <ToastContainer />
-      <motion.h2 className="text-2xl font-bold mb-4 text-blue-800" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }}>
-        Add New Player
-      </motion.h2>
+      <ToastContainer position="top-right" autoClose={2000} />
+
+         {/* Player Statistics */}
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard label="Total Members" value={stats.totalMembers} icon={<Users className="w-12 h-12 text-blue-600" />} />
+        <StatCard label="Junior : Adult" value={`${stats.juniors} / ${stats.adults}`} icon={<Users className="w-12 h-12 text-green-600" />} />
+        <StatCard label="Male : Female" value={`${stats.males} / ${stats.females}`} icon={<Users className="w-12 h-12 text-pink-500" />} />
+      </div>
+   
+
+      {/* Add New Player Heading and Form */}
+<div className="mt-8"> {/* <-- Increase this value to push it further down */}
+  <motion.h2
+    className="text-2xl font-bold mb-4 text-blue-800"
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    transition={{ duration: 0.6 }}
+  >
+    Add New Player
+  </motion.h2>
+  </div>
       <Card>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           <div>
@@ -248,19 +309,39 @@ export default function AddPlayerPage() {
             <Input className={inputClass('dob')} type="date" name="dob" value={formData.dob} onChange={handleChange} />
             {renderError('dob')}
           </div>
-          <div>
-            <Label>Sex</Label>
-            <Select value={formData.sex} onValueChange={(val) => handleChange({ target: { name: 'sex', value: val } })}>
-              <SelectTrigger>
-                <span>{formData.sex || 'Select'}</span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Male">Male</SelectItem>
-                <SelectItem value="Female">Female</SelectItem>
-              </SelectContent>
-            </Select>
-            {renderError('sex')}
-          </div>
+
+          <div className="flex flex-col space-y-1">
+  <div className="flex items-center space-x-1">
+    <label htmlFor="sex" className="text-sm font-medium">Sex</label>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Info className="w-4 h-4 text-gray-500 cursor-pointer" />
+        </TooltipTrigger>
+        <TooltipContent className="bg-white border rounded shadow text-sm max-w-sm">
+          Used to help assign players to appropriate match formats (e.g., Men's, Women's, Mixed Doubles) based on competition categories. This does not restrict participation or identity.
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  </div>
+
+  <Select
+    value={formData.sex}
+    onValueChange={(val) => handleChange({ target: { name: 'sex', value: val } })}
+  >
+    <SelectTrigger>
+      <span>{formData.sex || 'Select'}</span>
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="Male">Male</SelectItem>
+      <SelectItem value="Female">Female</SelectItem>
+    </SelectContent>
+  </Select>
+
+  {renderError('sex')}
+</div>
+
+
           <div className="flex items-center space-x-2">
             <input type="checkbox" name="isJunior" checked={formData.isJunior} onChange={handleChange} disabled={isJuniorDisabled} />
             <Label>Junior Player?</Label>

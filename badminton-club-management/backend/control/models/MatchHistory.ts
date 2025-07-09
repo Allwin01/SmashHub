@@ -7,7 +7,7 @@ const matchHistorySchema = new mongoose.Schema({
   matchDate: { type: String, required: true },
   matchTime: { type: String, required: true },
   result: { type: String, enum: ['Win', 'Loss'], required: true },
-  matchType: { type: String, enum: ['MS', 'WS', 'MD', 'WD', 'MX'], required: true },
+  matchType: { type: String, enum: ['MS', 'WS', 'MD', 'WD', 'XD'], required: true },
   partner: String,
   partnerSex: String,
   opponents: [

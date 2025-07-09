@@ -30,6 +30,30 @@ export interface IPlayer extends Document {
     date: string;
     skills: Record<string, Record<string, number>>;
   }[];
+  coachComment?: string;
+  matchHistory: {
+    matchId: string;
+    matchDate: string;
+    matchTime: string;
+    result: 'Win' | 'Loss';
+    matchType: 'MS' | 'WS' | 'MD' | 'WD' | 'XD';
+    team: {
+      players: string[];
+      gender: 'Male' | 'Female';
+    };
+    opponents: {
+      names: string[];
+      genders: ('Male' | 'Female')[];
+    };
+    points: number;
+    duration: string;
+    courtNo: number;
+  };
+  matchCount: { type: number, default: 0 };
+averagePoints: { type: number, default: 0 }
+
+  
+  
 }
 
 const PlayerSchema: Schema = new Schema<IPlayer>({
@@ -95,6 +119,33 @@ const PlayerSchema: Schema = new Schema<IPlayer>({
       },
     },
   ],
+  coachComment: { type: String, default: '' },
+  matchHistory: [
+    {
+      matchId: { type: String, required: true },
+      matchDate: { type: String, required: true },       // Format: 'YYYY-MM-DD'
+      matchTime: { type: String, required: true },       // Format: 'HH:mm:ss'
+      result: { type: String, enum: ['Win', 'Loss'], required: true },
+      matchType: { type: String, enum: ['MS', 'WS', 'MD', 'WD', 'XD'], required: true },
+      team: {
+        players: [{ type: String, required: true }],     // Your name + partner
+        gender: { type: String, enum: ['Male', 'Female'], required: true }
+      },
+      opponents: {
+        names: [{ type: String, required: true }],
+        genders: [{ type: String, enum: ['Male', 'Female'], required: true }]
+      },
+      points: { type: Number, required: true },          // Points scored by player's team
+      duration: { type: String, required: true },        // e.g., '08:45'
+      courtNo: { type: Number, required: true }
+    }
+  ],
+  
+  
+  matchCount: { type: Number, default: 0 },
+averagePoints: { type: Number, default: 0 }
+
+  
   
 },
 { timestamps: true });
