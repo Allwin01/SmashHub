@@ -23,8 +23,11 @@ import { handleStartStopMatch } from '@/utils/matchUtils';
 import {
   handleSmartAssign,
   handleAutoAssign,
-  fetchTopPlayersWithHistory
+  fetchTopPlayersWithHistory, getAllSuggestedTeams
 } from '@/utils/matchAssigners';
+
+import ConfettiEffect from '@/components/ConfettiEffect';
+
 
 
 
@@ -78,9 +81,7 @@ const FloatingActions = ({ onSmartSelect, onAddCourt, onAddGuest }) => {
   export default function PegBoard() {
     const [players, setPlayers] = useState<Player[]>([]);
     const [courts, setCourts] = useState<{ courtNo: number; assigned: (Player | null)[] }[]>([
-      { courtNo: 1, assigned: [null, null, null, null] }
-    ]);
-    
+      { courtNo: 1, assigned: [null, null, null, null] }]);
     const [guestGender, setGuestGender] = useState<'Male' | 'Female' | null>(null);
     const [timer, setTimer] = useState<Record<number, number>>({});
     const [intervals, setIntervals] = useState<Record<number, NodeJS.Timeout>>({});
@@ -88,30 +89,119 @@ const FloatingActions = ({ onSmartSelect, onAddCourt, onAddGuest }) => {
     const [hasFetched, setHasFetched] = useState(false);
     const toastShownRef = useRef(false);
     const [showMatchPopup, setShowMatchPopup] = useState(false);
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-    const [selectionMode, setSelectionMode] = useState<'Auto' | 'Smart' | null>(null);
-    const [smartLevel, setSmartLevel] = useState<'High' | 'Medium' | 'Low' | null>(null);
     const [showGuestDialog, setShowGuestDialog] = useState(false);
     const [refreshWinnerKey, setRefreshWinnerKey] = useState(Date.now());
     const [summary, setSummary] = useState<MatchSummary | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
-    const [suggestedPlayers, setSuggestedPlayers] = useState([]);
+    const [showSmartAssignModal, setShowSmartAssignModal] = useState(false);
+ 
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [teamOptions, setTeamOptions] = useState<TeamOption[]>([]);
+    const [showCategoryDialog, setShowCategoryDialog] = useState(false);
+    const [selectedMode, setSelectedMode] = useState<'Auto' | 'Smart' | null>(null);
+    const [smartLevel, setSmartLevel] = useState<'High' | 'Medium' | 'Low' | null>(null);
+    const [suggestedPlayers, setSuggestedPlayers] = useState([]);   
+    const [winningTeam, setWinningTeam] = useState<Player[] | null>(null);
+    const [winningCourt, setWinningCourt] = useState<number | null>(null);
+
 
     
+    const onSmartSelect = () => {
+      setSelectedCategory(null);      // Reset selections
+      setSelectedMode(null);
+      setTeamOptions([]);
+      setShowMatchPopup(true);        // Opens the modal
+    };
     
-    
-{/*}
+
+    const handleSmartSelectClick = () => {
+      setShowCategoryDialog(true);  // Show category dialog first
+    };
+
     const prefillAutoPlayers = () => {
-      const court = getAvailableCourt(courts);
-      if (!court) return toast.error('No court available');
-      const selected = handleAutoAssign(selectedCategory ?? 'MS', courts, players);
-      if (selected?.length === 4) {
-        setSuggestedPlayers(selected);
-        setShowMatchPopup(true);
-      } else {
-        toast.warn('Not enough players');
+      const category = selectedCategory ?? 'MS';
+      handleAutoAssign(
+        category,
+        courts,
+        players,
+        setCourts,
+        setPlayers,
+        toggleTimer,
+        [],
+        setSuggestedPlayers,
+        true // 👈 previewOnly: true
+      );
+      // Slight delay to ensure UI updates after state
+      setTimeout(() => setShowMatchPopup(true), 50);
+    };
+
+
+
+    const handleConfirmTeamAssign = (selectedPlayers: Player[]) => {
+      const court = courts.find(c => c.assigned.every(p => !p));
+      if (!court) return toast.error('No free court');
+    
+      setCourts(prev => {
+        const updated = prev.map(c =>
+          c.courtNo === court.courtNo
+            ? { ...c, assigned: selectedPlayers }
+            : c
+        );
+        console.log("✅ Updating courts with assigned players:", selectedPlayers);
+        console.log('🧩 Updated courts after Start Match:', updated);
+        return updated;
+      });
+      
+
+      setPlayers(prev =>
+        prev.filter(p => !selectedPlayers.some(sp => sp.id === p.id))
+      );
+     // toggleTimer(court.courtNo); // Removed auto timer start
+      setShowSmartAssignModal(false);
+      setTeamOptions([]);
+    };
+    
+    type TeamOption = {
+      label: string;
+      icon: string;
+      players: Player[];
+      isSurprise?: boolean;
+    };
+
+    const fetchSuggestedTeams = async (category: string) => {
+      const clubId = localStorage.getItem('clubId');
+      if (!clubId || players.length < 4) return toast.warn('Not enough players');
+    
+      try {
+        const result = await getAllSuggestedTeams(clubId, players, courts, category);
+        setTeamOptions(result); // result: TeamOption[]
+        setShowSmartAssignModal(true);
+      } catch (err) {
+        toast.error('Failed to load suggested teams');
+        console.error('🔴 Team fetch error:', err);
       }
-    }; */}
+    };
+
+
+    
+const handleSmartSelect = async () => {
+  const clubId = localStorage.getItem('clubId');
+  if (!clubId || players.length < 4) return toast.warn('Not enough players');
+
+  const teamSets = await getAllSuggestedTeams(clubId, players, courts); // <- import this logic
+  if (teamSets.length === 0) {
+    toast.error('No valid team combinations found');
+    return;
+  }
+  setShowCategoryDialog(true);
+  setTeamOptions(teamSets);
+  setShowMatchPopup(true);
+};
+
+    
+ 
+  
+  
 
   useEffect(() => {
     const fetchPlayers = async () => {
@@ -151,39 +241,6 @@ const FloatingActions = ({ onSmartSelect, onAddCourt, onAddGuest }) => {
     }
   };
 
-
-
-  const handleConfirmAssignment = (category, mode, level) => {
-    const clubId = localStorage.getItem('clubId');
-    const court = getAvailableCourt(courts);
-    if (!court) return toast.error('No court available');
-  
-    if (mode === 'Smart') {
-      if (!level) return toast.warn('Please select level');
-      handleSmartAssign(clubId, category, level, courts, setCourts, setPlayers, toggleTimer);
-    } else {
-      handleAutoAssign(
-        category,
-        courts,
-        players,
-        setCourts,
-        setPlayers,
-        toggleTimer,
-        suggestedPlayers, // 👈 Use previewed selection
-        undefined,
-        false // 👈 Now do actual court assignment
-      );
-    }
-  
-    setShowMatchPopup(false);
-    setSelectedCategory(null);
-    setSmartLevel(null);
-    setSelectionMode(null);
-  };
-  
-
-
-  
   const toggleTimer = (courtNo: number) => {
     setIntervals(prev => {
       if (prev[courtNo]) {
@@ -201,37 +258,12 @@ const FloatingActions = ({ onSmartSelect, onAddCourt, onAddGuest }) => {
     });
   };
   
-
-  {/*}
-// ⏱️ Timer controls
-const toggleTimer = (courtNo: number) => {
-  if (intervals[courtNo]) {
-    clearInterval(intervals[courtNo]);
-    const newIntervals = { ...intervals };
-    delete newIntervals[courtNo];
-    setIntervals(newIntervals);
-  } else {
-    const newIntervals = {
-      ...intervals,
-      [courtNo]: setInterval(() => {
-        setTimer(prev => ({ ...prev, [courtNo]: (prev[courtNo] || 0) + 1 }));
-      }, 1000)
-    };
-    setIntervals(newIntervals);
-  }
-};
-
-
-const handleScoreChange = (courtNo: number, value: string) => {
-  setScores(prev => ({ ...prev, [courtNo]: value }));
-};
-
-
-
-
-
-
-*/}
+  const handleScoreChange = (courtNo: number, value: string) => {
+    console.log('📥 Typing Score for Court:', courtNo, '→', value);
+    setScores(prev => ({ ...prev, [courtNo]: value }));
+  };
+  
+  
 
 const formatTime = (seconds: number) => {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -293,6 +325,7 @@ useEffect(() => {
 
 
 
+
   //Add Guest Player
   const guestCounters = useRef({ Male: 1, Female: 1 });
  
@@ -313,23 +346,6 @@ useEffect(() => {
     toast.success(`${guestName} added to the pool.`);
   };
 
-  const prefillAutoPlayers = () => {
-    const category = selectedCategory ?? 'MS';
-    handleAutoAssign(
-      category,
-      courts,
-      players,
-      setCourts,
-      setPlayers,
-      toggleTimer,
-      [],
-      setSuggestedPlayers,
-      true // 👈 previewOnly: true
-    );
-    // Slight delay to ensure UI updates after state
-    setTimeout(() => setShowMatchPopup(true), 50);
-  };
-  
   
 
   return (
@@ -368,7 +384,7 @@ useEffect(() => {
       {/* 🏆 Winner Board Display */}
       <WinnerBoard refreshKey={refreshWinnerKey} />
   
-      {/* Floating Action Buttons */}
+      {/* Floating Action Buttons 
     
         <FloatingActions
         onSmartSelect={prefillAutoPlayers}
@@ -379,22 +395,87 @@ useEffect(() => {
           setGuestNameInput('');
           setShowGuestDialog(true);
         }}
-      />
+      />  
+
+<FloatingActions
+  onSmartSelect={handleSmartSelectClick}
+  onAddCourt={addCourt}
+  onAddGuest={() => {
+    setGuestGender(null);
+    setGuestNameInput('');
+    setShowGuestDialog(true);
+  }}
+/>
+
+<FloatingActions
+  onSmartSelect={onSmartSelect}
+  onAddCourt={addCourt}
+  onAddGuest={() => {
+    setGuestGender(null);
+    setGuestNameInput('');
+    setShowGuestDialog(true);
+  }}
+/>
+
+*/}
+
+
+
+
+<FloatingActions
+  onSmartSelect={() => setShowSmartAssignModal(true)}
+    onAddCourt={addCourt}
+    onAddGuest={() => {
+      setGuestGender(null);
+      setGuestNameInput('');
+      setShowGuestDialog(true);
+    }
+  }/>
+
+
+
   
-      {/* SmartAssignModal (centralized) */}
-      <SmartAssignModal
-        show={showMatchPopup}
-        onClose={() => {
-          setShowMatchPopup(false);
-          setSelectedCategory(null);
-          setSmartLevel(null);
-          setSelectionMode(null);
-        }}
-        onConfirm={handleConfirmAssignment}
-        suggestedPlayers={suggestedPlayers}
-        onRedoAuto={prefillAutoPlayers}
-      />
-  
+      {/* SmartAssignModal (centralized)  */}
+
+<SmartAssignModal
+  show={showSmartAssignModal}
+  players={players}
+  courts={courts}
+  suggestedPlayers={suggestedPlayers}
+  setSuggestedPlayers={setSuggestedPlayers}
+  onClose={() => setShowSmartAssignModal(false)}
+  onRedoAuto={prefillAutoPlayers}
+  onConfirm={handleConfirmTeamAssign}
+/>
+
+
+
+
+
+{showCategoryDialog && (
+  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+    <div className="bg-white p-6 rounded-2xl shadow-xl w-80 space-y-4">
+      <h2 className="text-xl font-bold text-center">Select Match Category</h2>
+      <div className="grid grid-cols-3 gap-3">
+        {['MS', 'WS', 'MD', 'WD', 'XD'].map(cat => (
+          <button
+            key={cat}
+            onClick={() => {
+              setSelectedCategory(cat);
+              setShowCategoryDialog(false);
+              fetchSuggestedTeams(cat);
+            }}
+            className="py-2 bg-indigo-500 text-white rounded-lg shadow hover:bg-indigo-600"
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+      <button onClick={() => setShowCategoryDialog(false)} className="text-sm text-gray-500 hover:underline text-center w-full">Cancel</button>
+    </div>
+  </div>
+)}
+
 
   {/* Layout */}
   <div className="flex flex-col lg:flex-row gap-6 mt-6">
@@ -402,30 +483,54 @@ useEffect(() => {
 
       <div className="flex-1 overflow-x-auto">
         <div className="flex flex-wrap justify-center gap-6">
-          {courts.map(({ courtNo, assigned }, index) => (
-            <CourtCard
-              key={courtNo}
-              courtNo={courtNo}
-              assigned={assigned}
-              score={scores[courtNo] || ''}
-              onScoreChange={(value) => handleScoreChange(courtNo, value)}
-              onStartStop={() =>
-                handleStartStopMatch({
-                  courtNo,
-                  courts,
-                  scores,
-                  timer,
-                  setPlayers,
-                  setCourts,
-                  toggleTimer,
-                  setRefreshWinnerKey,
-                })
-              }
-              isRunning={!!intervals[courtNo]}
-              time={formatTime(timer[courtNo] || 0)}
-              onRemoveCourt={() => removeCourt(index)}
-            />
-          ))}
+        {courts.map(({ courtNo, assigned }, index) => (
+  <div key={courtNo} className="relative" id={`court-${courtNo}`}>
+    <CourtCard
+      courtNo={courtNo}
+      assigned={assigned}
+      score={scores[courtNo] || ''}
+      onScoreChange={(value) => handleScoreChange(courtNo, value)}
+      onStartStop={() => {
+        if (!intervals[courtNo]) {
+          toggleTimer(courtNo);
+          toast.info(`🕒 Match started on Court ${courtNo}`, { position: 'bottom-center' });
+        } else {
+          handleStartStopMatch({
+            courtNo,
+            courts,
+            scores,
+            timer,
+            setPlayers,
+            setCourts,
+            toggleTimer,
+            setRefreshWinnerKey,
+            onWin: (team) => {
+              setWinningTeam(team);
+              setWinningCourt(courtNo); // Track the winning court here
+            },
+            onScoreChange: (val) => handleScoreChange(courtNo, val) // ✅ Pass reset logic
+          });
+        }
+      }}
+      isRunning={!!intervals[courtNo]}
+      time={formatTime(timer[courtNo] || 0)}
+      onRemoveCourt={() => removeCourt(index)}
+    />
+
+    {winningTeam && winningCourt === courtNo && (
+      <ConfettiEffect
+        winnerNames={winningTeam.map(p => p.name).join(' & ')}
+        containerId={`court-${courtNo}`}
+        onComplete={() => {
+          setWinningTeam(null);
+          setWinningCourt(null);
+        }}
+      />
+    )}
+  </div>
+))}
+
+
         </div>
       </div>
     </div>

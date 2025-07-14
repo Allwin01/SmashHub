@@ -186,6 +186,8 @@ npm install @next/font/google
 npm install canvas-confetti
 npx shadcn@latest add badge
 npm install @radix-ui/react-dialog
+npm install lodash.debounce
+
 
 npm install date-fns
 npm install debug
@@ -202,7 +204,7 @@ git add filename.ext              # Stage specific file
 # OR
 git add folder/                   # Stage specific folder
 
-git commit -m "crated pegboard,Player attendance and Skill View export"
+git commit -m "updated Smart pegboard,Player attendance and Finance Dashboard"
 git push origin main
 
 
@@ -219,7 +221,3 @@ db.players.find({"skillsHistory.1": { $exists: true },clubId: ObjectId("68596169
 
 db.players.find({"skillsHistory.1": { $exists: true }})
 
-db.players.updateOne({ _id: ObjectId("685401c407b5dc44e0dad4d4") }, { $push: { skillGroupAverages: { $each: [ { date: '2025-06-25', groupAverages: { 'Movement Phases': 2, 'Grips & Grip Positions': 2, 'Forehand Strokes': 2, 'Backhand Strokes': 2, 'Serve Techniques': 2, 'Footwork & Speed': 2 } }, { date: '2025-06-26', groupAverages: { 'Movement Phases': 3, 'Grips & Grip Positions': 3, 'Forehand Strokes': 3, 'Backhand Strokes': 3, 'Serve Techniques': 3, 'Footwork & Speed': 3 } }, { date: '2025-06-27', groupAverages: { 'Movement Phases': 4, 'Grips & Grip Positions': 4, 'Forehand Strokes': 4, 'Backhand Strokes': 4, 'Serve Techniques': 4, 'Footwork & Speed': 4 } }, { date: '2025-06-28', groupAverages: { 'Movement Phases': 5, 'Grips & Grip Positions': 5, 'Forehand Strokes': 5, 'Backhand Strokes': 5, 'Serve Techniques': 5, 'Footwork & Speed': 5 } } ] } } )
-
-
-db.players.updateOne({ _id: ObjectId("685401c407b5dc44e0dad4d4") }, { $push: { skillGroupAverages: { $each: [ { date: "2025-06-25", groupAverages: { "Movement Phases": 2, "Grips & Grip Positions": 2, "Forehand Strokes": 2, "Backhand Strokes": 2, "Serve Techniques": 2, "Footwork & Speed": 2 } }, { date: "2025-06-26", groupAverages: { "Movement Phases": 3, "Grips & Grip Positions": 3, "Forehand Strokes": 3, "Backhand Strokes": 3, "Serve Techniques": 3, "Footwork & Speed": 3 } }, { date: "2025-06-27", groupAverages: { "Movement Phases": 4, "Grips & Grip Positions": 4, "Forehand Strokes": 4, "Backhand Strokes": 4, "Serve Techniques": 4, "Footwork & Speed": 4 } }, { date: "2025-06-28", groupAverages: { "Movement Phases": 5, "Grips & Grip Positions": 5, "Forehand Strokes": 5, "Backhand Strokes": 5, "Serve Techniques": 5, "Footwork & Speed": 5 } } ] } } });

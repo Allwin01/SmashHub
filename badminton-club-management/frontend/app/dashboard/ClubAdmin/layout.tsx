@@ -86,8 +86,9 @@ export default function ClubAdminLayout({ children }: { children: ReactNode }) {
     { label: 'Smart Pegboard', icon: BarChart2, route: '/dashboard/clubadmin/pegboard' },
     { label: 'Tournament', icon: CalendarCheck2, route: '/dashboard/clubadmin/tournament' },
     { label: 'Player Attendance', icon: CalendarClock, route: '/dashboard/clubadmin/player-attendance' },
-    { label: 'Financial Dashboard', icon: DollarSign, route: '/dashboard/clubadmin/finance' },
-    { label: 'Club User Management', icon: ShieldCheck, route: '/dashboard/clubadmin/UserPermission' },
+    { label: 'Club Ledger', icon: DollarSign, route: '/dashboard/clubadmin/finance' },
+    { label: 'Access Control', icon: ShieldCheck, route: '/dashboard/clubadmin/UserPermission' },
+    { label: 'Captains Squard', icon: ShieldCheck, route: '/dashboard/clubadmin/captainsquard' },
   ];
 
   if (!mounted) return null;
@@ -215,4 +216,3 @@ export default function ClubAdminLayout({ children }: { children: ReactNode }) {
     </TooltipProvider>
   );
 }
-  

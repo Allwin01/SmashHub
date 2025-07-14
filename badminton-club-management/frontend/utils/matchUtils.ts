@@ -25,6 +25,19 @@ export async function saveMatchHistory(
   }
 }
 
+function getWinningTeam(score: string, teamA: Player[], teamB: Player[]): Player[] | null {
+  const [a, b] = score.split('/').map(Number);
+  const max = Math.max(a, b);
+  const min = Math.min(a, b);
+
+  if (max < 21) return null;
+  if (max === 21 && min <= 19) return a > b ? teamA : teamB;
+  if (max >= 22 && max <= 30 && max - min >= 2) return a > b ? teamA : teamB;
+  if (max === 30) return a > b ? teamA : teamB;
+
+  return null;
+}
+
 export async function handleStartStopMatch({
   courtNo,
   courts,
@@ -33,7 +46,10 @@ export async function handleStartStopMatch({
   setPlayers,
   setCourts,
   toggleTimer,
-  setRefreshWinnerKey
+  setRefreshWinnerKey,
+  onWin,
+  onScoreChange // ✅ Added this prop
+
 }: {
   courtNo: number;
   courts: { courtNo: number; assigned: (Player | null)[] }[];
@@ -43,6 +59,8 @@ export async function handleStartStopMatch({
   setCourts: React.Dispatch<any>;
   toggleTimer: (courtNo: number) => void;
   setRefreshWinnerKey: React.Dispatch<React.SetStateAction<number>>;
+  onWin?: (team: Player[]) => void;
+  onScoreChange?: (val: string) => void; // ✅ Pass this from CourtCard
 }) {
   const assignedPlayers = courts.find(c => c.courtNo === courtNo)?.assigned || [];
   const scoreValue = scores[courtNo];
@@ -61,8 +79,16 @@ export async function handleStartStopMatch({
     ? [[assignedPlayers[0]], [assignedPlayers[1]]]
     : [assignedPlayers.slice(0, 2), assignedPlayers.slice(2)];
 
-  const winningTeam = scoreA > scoreB ? teamA : teamB;
-  const losingTeam = scoreA > scoreB ? teamB : teamA;
+  const winningTeam = getWinningTeam(scoreValue, teamA, teamB);
+  if (!winningTeam) {
+    toast.warn('⚠️ Match undecided. Ensure score follows badminton rules.');
+    return;
+  }
+
+  const losingTeam = winningTeam === teamA ? teamB : teamA;
+
+  // Trigger confetti or UI animation via parent callback
+  if (onWin) onWin(winningTeam);
 
   setPlayers(prev =>
     prev.map(p => winningTeam.find(w => w.id === p.id) ? { ...p, wins: (p.wins || 0) + 1 } : p)
@@ -103,8 +129,11 @@ export async function handleStartStopMatch({
   setPlayers(prev => [...prev, ...winningTeam, ...losingTeam]);
   setCourts(prev => prev.map(c => c.courtNo === courtNo ? { ...c, assigned: [] } : c));
   toggleTimer(courtNo);
+  // ✅ Now reset score (which will hide the textbox)
+  if (onScoreChange) onScoreChange(''); // ✅ Now clear score field to hide input
+{/*}
   toast.success(`✅ Match saved! 🏆 ${winningTeam.map(p => p.name).join(' & ')} won`, {
     autoClose: 5000,
-    position: 'top-center'
-  });
+  position: 'top-center'   
+  }); */}
 }
