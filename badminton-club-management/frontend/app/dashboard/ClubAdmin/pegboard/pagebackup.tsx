@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { DndContext, closestCenter } from '@dnd-kit/core';
+import { DndContext, closestCenter, DragEndEvent, useDroppable, DragOverEvent } from '@dnd-kit/core';
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -10,715 +9,683 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import dynamic from 'next/dynamic';
+import { Plus, PlusCircle, Users, Wand2, XCircle, X,  X as XIcon,Trophy, Maximize2, Minimize2 } from 'lucide-react';
+import WinnerBoard from '@/components/WinnerBoard'; // adjust path
+
+import SmartAssignModal from '@/components/SmartAssignModal';
+import CourtCard from '@/components/CourtCard';
+import PlayerPool from '@/components/PlayerPool';
+import { handleStartStopMatch } from '@/utils/matchUtils';
+import {
+  handleSmartAssign,
+  handleAutoAssign,
+  fetchTopPlayersWithHistory, getAllSuggestedTeams
+} from '@/utils/matchAssigners';
+
+import ConfettiEffect from '@/components/ConfettiEffect';
 
 interface Player {
   id: string;
   name: string;
   gender: 'Male' | 'Female';
+  profileImageUrl?: string;
   matchCount?: number;
   matchHistory?: { points: number }[];
   avgScore?: number;
+  wins?: number;
 }
 
-function SortablePlayer({ id, name, gender }: Player) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition
-  } = useSortable({ id });
+const getAvailableCourt = (courts) => courts.find(c => c.assigned.every(p => !p));
+const isSmartEligible = (players) => players.filter(p => !p.id.startsWith('guest')).slice(0, 8).every(p => p.matchCount >= 5);
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition
-  };
 
-  const gradient = gender === 'Male' ? 'from-blue-400 to-purple-400' : 'from-pink-400 to-cyan-400';
 
+const FloatingActions = ({ onSmartSelect, onAddCourt, onAddGuest }) => {
+  const buttons = [
+    { icon: <Wand2 className="w-5 h-5 text-white" />, label: 'Smart Select', onClick: onSmartSelect, color: 'from-green-400 to-green-600' },
+    { icon: <PlusCircle className="w-5 h-5 text-white" />, label: 'Add Court', onClick: onAddCourt, color: 'from-blue-400 to-blue-600' },
+    { icon: <Users className="w-5 h-5 text-white" />, label: 'Add Guest', onClick: onAddGuest, color: 'from-pink-400 to-pink-600' }
+  ];
   return (
-    <motion.div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      style={style}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className={`p-2 mb-2 bg-gradient-to-r ${gradient} rounded-xl shadow cursor-move border border-gray-300 text-white font-semibold`}
-    >
-      {name}
-    </motion.div>
+    <div className="fixed bottom-6 right-6 flex flex-col gap-4 z-50">
+      {buttons.map(({ icon, label, onClick, color }, idx) => (
+        <motion.button
+          key={idx}
+          onClick={onClick}
+          title={label}
+          className={`w-14 h-14 rounded-full shadow-xl bg-gradient-to-br ${color} flex items-center justify-center relative group`}
+          whileHover={{ scale: 1.1 }}
+          animate={{ scale: [1, 1.05, 1] }}
+          transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+        >
+          {icon}
+          <span className="absolute right-16 top-1/2 -translate-y-1/2 text-xs px-3 py-1 bg-black text-white rounded opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap">
+            {label}
+          </span>
+        </motion.button>
+      ))}
+    </div>
   );
-}
+};
 
-function PlayerSlot({ player }: { player: Player | null }) {
-  if (!player) return <div className="bg-white/20 w-full h-full rounded-xl" />;
-  const color = player.gender === 'Male' ? 'from-blue-400 to-cyan-400' : 'from-pink-400 to-purple-400';
-  return (
-    <motion.div
-      initial={{ scale: 0.8, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ duration: 0.3 }}
-      className={`bg-gradient-to-br ${color} px-4 py-2 rounded-xl shadow-lg text-sm font-bold text-white border-2 border-white/30 backdrop-blur-sm`}
-    >
-      {player.name}
-    </motion.div>
-  );
-}
-
-export default function PegBoard() {
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [courts, setCourts] = useState<{ courtNo: number; assigned: Player[] }[]>([{ courtNo: 1, assigned: [] }]);
-  const [timer, setTimer] = useState<Record<number, number>>({});
-  const [intervals, setIntervals] = useState<Record<number, NodeJS.Timeout>>({});
-  const [scores, setScores] = useState<Record<number, string>>({});
-  const [category, setCategory] = useState<string>('Mens Doubles');
-  const [matchHistory, setMatchHistory] = useState<any[]>([]);
-  const [hasFetched, setHasFetched] = useState(false);
-
-// Add state handlers
-const [showMatchPopup, setShowMatchPopup] = useState(false);
-const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-const [selectionMode, setSelectionMode] = useState<'Auto' | 'Smart' | null>(null);
-const [smartLevel, setSmartLevel] = useState<'High' | 'Medium' | 'Low' | null>(null);
+  export default function PegBoard() {
+    const [players, setPlayers] = useState<Player[]>([]);
+    const [courts, setCourts] = useState<{ courtNo: number; assigned: (Player | null)[] }[]>([
+      { courtNo: 1, assigned: [null, null, null, null] }]);
+    const [guestGender, setGuestGender] = useState<'Male' | 'Female' | null>(null);
+    const [timer, setTimer] = useState<Record<number, number>>({});
+    const [intervals, setIntervals] = useState<Record<number, NodeJS.Timeout>>({});
+    const [scores, setScores] = useState<Record<number, string>>({});
+    const [hasFetched, setHasFetched] = useState(false);
+    const toastShownRef = useRef(false);
+    const [showMatchPopup, setShowMatchPopup] = useState(false);
+    const [showGuestDialog, setShowGuestDialog] = useState(false);
+    const [refreshWinnerKey, setRefreshWinnerKey] = useState(Date.now());
+    const [summary, setSummary] = useState<MatchSummary | null>(null);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const [showSmartAssignModal, setShowSmartAssignModal] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [teamOptions, setTeamOptions] = useState<TeamOption[]>([]);
+    const [showCategoryDialog, setShowCategoryDialog] = useState(false);
+    const [selectedMode, setSelectedMode] = useState<'Auto' | 'Smart' | null>(null);
+    const [smartLevel, setSmartLevel] = useState<'High' | 'Medium' | 'Low' | null>(null);
+    const [suggestedPlayers, setSuggestedPlayers] = useState([]);   
+    const [winningTeam, setWinningTeam] = useState<Player[] | null>(null);
+    const [winningCourt, setWinningCourt] = useState<number | null>(null);
 
 
-  // Fetch player attendance from backend
+    
+    const onSmartSelect = () => {
+      setSelectedCategory(null);      // Reset selections
+      setSelectedMode(null);
+      setTeamOptions([]);
+      setShowMatchPopup(true);        // Opens the modal
+    };
+    
 
-const toastShownRef = useRef(false);
-
-useEffect(() => {
-  const fetchPlayers = async () => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const token = localStorage.getItem('token');
-      const clubId = localStorage.getItem('clubId');
-
-      if (!token || !clubId) throw new Error('Missing token or clubId');
-
-      const res = await fetch(
-        `http://localhost:5050/api/players/attendances?date=${today}&clubId=${clubId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (!res.ok) throw new Error(`Fetch failed with status ${res.status}`);
-
-      const data = await res.json();
-      setPlayers(data);
-      setHasFetched(true);
-    } catch (err) {
-      console.error('❌ Error fetching players:', err);
-      if (!toastShownRef.current) {
-        toast.error('❌ Failed to fetch players');
-        toastShownRef.current = true;
-      }
-    }
-  };
-
-  if (!hasFetched) fetchPlayers();
-}, [hasFetched]);
-
-
-  const handleDragEnd = (event: any) => {
-    const { active, over } = event;
-    if (active.id && over?.id && active.id !== over.id) {
-      const draggedPlayer = players.find(p => p.id === active.id);
-      if (!draggedPlayer) return;
-      const availableCourt = courts.find(c => c.assigned.length < 4);
-      if (availableCourt) {
-        setCourts(prev => prev.map(c => c.courtNo === availableCourt.courtNo ? { ...c, assigned: [...c.assigned, draggedPlayer] } : c));
-        setPlayers(prev => prev.filter(p => p.id !== draggedPlayer.id));
-      }
-    }
-  };
-
-  const addCourt = () => setCourts(prev => [...prev, { courtNo: prev.length + 1, assigned: [] }]);
-
-  const removeCourt = (index: number) => {
-    const courtNo = courts[index].courtNo;
-    setCourts(prev => prev.filter((_, i) => i !== index));
-    clearInterval(intervals[courtNo]);
-    const { [courtNo]: _, ...rest } = timer;
-    setTimer(rest);
-  };
-
-  const toggleTimer = (courtNo: number) => {
-    if (intervals[courtNo]) {
-      clearInterval(intervals[courtNo]);
-      const newIntervals = { ...intervals };
-      delete newIntervals[courtNo];
-      setIntervals(newIntervals);
-    } else {
-      const newIntervals = {
-        ...intervals,
-        [courtNo]: setInterval(() => {
-          setTimer(prev => ({ ...prev, [courtNo]: (prev[courtNo] || 0) + 1 }));
-        }, 1000)
-      };
-      setIntervals(newIntervals);
-    }
-  };
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = (seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
-
-  const handleScoreChange = (courtNo: number, value: string) => {
-    setScores(prev => ({ ...prev, [courtNo]: value }));
-  };
-
-
-  //Add Guest Player
-  const addGuestPlayer = (name: string, gender: 'Male' | 'Female') => {
-    const newId = 'guest_' + Date.now();
-    setPlayers(prev => [...prev, { id: newId, name, gender }]);
-    toast.success(`Guest player "${name}" added.`);
-  };
-
- 
-
-
-//updated Auto Assign
-  const handleAutoAssign = (category: string) => {
-    const court = courts.find(c => c.assigned.length === 0);
-    if (!court) {
-      toast.warn('No available court found');
-      return;
-    }
-  
-    // Filter players based on selected category
-    let eligiblePlayers: Player[] = [];
-  
-    switch (category) {
-      case 'MS': // Men's Singles
-      case 'MD': // Men's Doubles
-        eligiblePlayers = players.filter(p => p.gender === 'Male' && !p.id.startsWith('guest'));
-        break;
-      case 'WS': // Women's Singles
-      case 'WD': // Women's Doubles
-        eligiblePlayers = players.filter(p => p.gender === 'Female' && !p.id.startsWith('guest'));
-        break;
-      case 'XD': // Mixed Doubles
-        const males = players.filter(p => p.gender === 'Male' && !p.id.startsWith('guest'));
-        const females = players.filter(p => p.gender === 'Female' && !p.id.startsWith('guest'));
-  
-        if (males.length < 2 || females.length < 2) {
-          toast.error('Not enough male and female players for Mixed Doubles');
-          return;
-        }
-  
-        const selectedMales = males.slice(0, 2);
-        const selectedFemales = females.slice(0, 2);
-        const xdSelected = [...selectedMales, ...selectedFemales];
-  
-        setCourts(prev => prev.map(c => c.courtNo === court.courtNo ? { ...c, assigned: xdSelected } : c));
-        setPlayers(prev => prev.filter(p => !xdSelected.includes(p)));
-        toggleTimer(court.courtNo);
-        return;
-    }
-  
-    // For MD, WD, MS, WS
-    if (eligiblePlayers.length < 4) {
-      toast.error('Not enough eligible players in the pool');
-      return;
-    }
-  
-    // Pick first player and 3 random from next 7
-    const first = eligiblePlayers[0];
-    const rest = eligiblePlayers.slice(1, 8); // next 7
-    const shuffled = [...rest].sort(() => 0.5 - Math.random());
-    const selected = [first, ...shuffled.slice(0, 3)];
-  
-    if (selected.length < 4) {
-      toast.error('Unable to select 4 players automatically');
-      return;
-    }
-  
-    setCourts(prev =>
-      prev.map(c =>
-        c.courtNo === court.courtNo ? { ...c, assigned: selected } : c
-      )
-    );
-    setPlayers(prev => prev.filter(p => !selected.includes(p)));
-    toggleTimer(court.courtNo);
-  };
-  
-
-
-
-// 🧠 Smart assignment logic using historical match data
-// Merged with match history recording and player stat updates
-
-
-const handleSmartAssign = async (category: string, level: 'High' | 'Medium' | 'Low') => {
-  const court = courts.find(c => c.assigned.length === 0);
-  if (!court) {
-    toast.warn('No available court found');
-    return;
-  }
-
-  // Step 1: Filter out guest players with at least 5 matches and calculate avgScore from last 10
-  let eligiblePlayers = players.filter(p => !p.id.startsWith('guest') && p.matchHistory?.length >= 5).map(p => {
-    const recentMatches = p.matchHistory.slice(-10);
-    const total = recentMatches.reduce((sum, match) => sum + match.points, 0);
-    const avgScore = Math.round(total / recentMatches.length);
-    return { ...p, avgScore };
-  });
-
-  // Step 2: Category filter
-  if (['MS', 'MD'].includes(category)) {
-    eligiblePlayers = eligiblePlayers.filter(p => p.gender === 'Male');
-  } else if (['WS', 'WD'].includes(category)) {
-    eligiblePlayers = eligiblePlayers.filter(p => p.gender === 'Female');
-  }
-
-  // Step 3: For MX category
-  if (category === 'XD') {
-    const males = eligiblePlayers.filter(p => p.gender === 'Male');
-    const females = eligiblePlayers.filter(p => p.gender === 'Female');
-    if (males.length < 2 || females.length < 2) {
-      toast.error('Not enough eligible players for MX');
-      return;
-    }
-
-    const getLevelGroup = (list: any[]) => {
-      const high = list.filter(p => p.avgScore >= 70);
-      const medium = list.filter(p => p.avgScore >= 40 && p.avgScore < 70);
-      const low = list.filter(p => p.avgScore < 40);
-      return { high, medium, low };
+    const handleSmartSelectClick = () => {
+      setShowCategoryDialog(true);  // Show category dialog first
     };
 
-    const maleGroup = getLevelGroup(males);
-    const femaleGroup = getLevelGroup(females);
+    const prefillAutoPlayers = () => {
+      const category = selectedCategory ?? 'MS';
+      handleAutoAssign(
+        category,
+        courts,
+        players,
+        setCourts,
+        setPlayers,
+        toggleTimer,
+        [],
+        setSuggestedPlayers,
+        true // 👈 previewOnly: true
+      );
+      // Slight delay to ensure UI updates after state
+      setTimeout(() => setShowMatchPopup(true), 50);
+    };
 
-    const levelGroup = level.toLowerCase();
-    let selectedMales = maleGroup[levelGroup];
-    let selectedFemales = femaleGroup[levelGroup];
 
-    if (selectedMales.length < 2) {
-      selectedMales = [...selectedMales, ...maleGroup.medium, ...maleGroup.low].slice(0, 2);
-    } else {
-      selectedMales = selectedMales.slice(0, 2);
+
+    const handleConfirmTeamAssign = (selectedPlayers: Player[]) => {
+      const court = courts.find(c => c.assigned.every(p => !p));
+      if (!court) return toast.error('No free court');
+    
+      setCourts(prev => {
+        const updated = prev.map(c =>
+          c.courtNo === court.courtNo
+            ? { ...c, assigned: selectedPlayers }
+            : c
+        );
+        console.log("✅ Updating courts with assigned players:", selectedPlayers);
+        console.log('🧩 Updated courts after Start Match:', updated);
+        return updated;
+      });
+      
+
+      setPlayers(prev =>
+        prev.filter(p => !selectedPlayers.some(sp => sp.id === p.id))
+      );
+     // toggleTimer(court.courtNo); // Removed auto timer start
+      setShowSmartAssignModal(false);
+      setTeamOptions([]);
+    };
+    
+    type TeamOption = {
+      label: string;
+      icon: string;
+      players: Player[];
+      isSurprise?: boolean;
+    };
+
+    const fetchSuggestedTeams = async (category: string) => {
+      const clubId = localStorage.getItem('clubId');
+      if (!clubId || players.length < 4) return toast.warn('Not enough players');
+    
+      try {
+        const result = await getAllSuggestedTeams(clubId, players, courts, category);
+        setTeamOptions(result); // result: TeamOption[]
+        setShowSmartAssignModal(true);
+      } catch (err) {
+        toast.error('Failed to load suggested teams');
+        console.error('🔴 Team fetch error:', err);
+      }
+    };
+
+    const handleReorderPool = (fromIndex: number, toIndex: number) => {
+      setPlayers(prev => {
+        const updated = [...prev];
+        const [moved] = updated.splice(fromIndex, 1);
+        updated.splice(toIndex, 0, moved);
+        return updated;
+      });
+    };
+    
+    const handleDropToCourt = (courtNo: number, slotIndex: number, player: Player) => {
+      setCourts(prevCourts => {
+        const updated = prevCourts.map(court => {
+          if (court.courtNo !== courtNo) return court;
+          const newAssigned = [...court.assigned];
+          newAssigned[slotIndex] = player;
+          return { ...court, assigned: newAssigned };
+        });
+        return updated;
+      });
+    
+      setPlayers(prev => prev.filter(p => p.id !== player.id));
+    };
+    
+    const handleDropToPool = (player: Player, insertIndex: number = 0) => {
+      setPlayers(prev => {
+        const filtered = prev.filter(p => p.id !== player.id);
+        filtered.splice(insertIndex, 0, player);
+        return filtered;
+      });
+    
+      setCourts(prev => prev.map(c => ({
+        ...c,
+        assigned: c.assigned.map(p => (p?.id === player.id ? null : p))
+      })));
+    };
+    
+    const handleDropFromCourt = (player: Player, insertIndex: number) => {
+      // Remove from all courts first
+      setCourts(prev =>
+        prev.map(c => ({
+          ...c,
+          assigned: c.assigned.map(p => (p?.id === player.id ? null : p)),
+        }))
+      );
+      // Then insert into pool
+      setPlayers(prev => {
+        const without = prev.filter(p => p.id !== player.id);
+        const updated = [...without];
+        updated.splice(insertIndex, 0, player);
+        return updated;
+      });
+    };
+
+const handleSmartSelect = async () => {
+  const clubId = localStorage.getItem('clubId');
+  if (!clubId || players.length < 4) return toast.warn('Not enough players');
+
+  const teamSets = await getAllSuggestedTeams(clubId, players, courts); // <- import this logic
+  if (teamSets.length === 0) {
+    toast.error('No valid team combinations found');
+    return;
+  }
+  setShowCategoryDialog(true);
+  setTeamOptions(teamSets);
+  setShowMatchPopup(true);
+};
+
+  useEffect(() => {
+    const fetchPlayers = async () => {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const token = localStorage.getItem('token');
+        const clubId = localStorage.getItem('clubId');
+        const res = await fetch(`http://localhost:5050/api/players/attendances?date=${today}&clubId=${clubId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+        const data = await res.json();
+        setPlayers(data);
+      } catch (err) {
+        if (!toastShownRef.current) {
+          toast.error('Failed to fetch players');
+          toastShownRef.current = true;
+        }
+      }
+    };
+    fetchPlayers();
+  }, []);
+
+// 🧩 Updated Drag Logic in PegBoard
+const handleDragOver = (event: DragOverEvent) => {
+  const { active, over } = event;
+  if (!over) return;
+
+  const fromPool = active?.data?.current?.from === 'pool';
+  const fromCourt = active?.data?.current?.from === 'court';
+  const draggedPlayer = active?.data?.current?.player;
+  if (!draggedPlayer) return;
+
+  const overId = over.id as string;
+  if (overId.startsWith('slot-')) {
+    const [, courtStr, slotStr] = overId.split('-');
+    const courtNo = parseInt(courtStr);
+    const slotIndex = parseInt(slotStr);
+    if (isNaN(courtNo) || isNaN(slotIndex)) return;
+
+    setCourts(prev =>
+      prev.map(c =>
+        c.courtNo === courtNo
+          ? {
+              ...c,
+              assigned: c.assigned.map((p, i) =>
+                i === slotIndex ? draggedPlayer : p
+              )
+            }
+          : c
+      )
+    );
+
+    if (fromPool) {
+      setPlayers(prev => prev.filter(p => p.id !== draggedPlayer.id));
     }
 
-    if (selectedFemales.length < 2) {
-      selectedFemales = [...selectedFemales, ...femaleGroup.medium, ...femaleGroup.low].slice(0, 2);
-    } else {
-      selectedFemales = selectedFemales.slice(0, 2);
-    }
+    // Reinsert dragged player back to pool if they are moved out of a court slot
+    if (fromCourt) {
+      const fromSlotIndex = active.data.current.index;
+      const fromCourtNo = courts.find(c =>
+        c.assigned[fromSlotIndex]?.id === draggedPlayer.id
+      )?.courtNo;
 
-    if (selectedMales.length < 2 || selectedFemales.length < 2) {
-      toast.error('Unable to find enough qualified players for this level');
+      // If moved to different court/slot
+      if (fromCourtNo !== courtNo || fromSlotIndex !== slotIndex) {
+        setPlayers(prev => [{ ...draggedPlayer }, ...prev]);
+        setCourts(prev =>
+          prev.map(c =>
+            c.courtNo === fromCourtNo
+              ? {
+                  ...c,
+                  assigned: c.assigned.map((p, i) =>
+                    i === fromSlotIndex ? null : p
+                  )
+                }
+              : c
+          )
+        );
+      }
+    }
+  }
+};
+
+
+
+// --- Entire file updated to handle replacedPlayer logic in drag drop ---
+
+// In the drag end logic
+const handleDragEnd = (event: DragEndEvent) => {
+  const { active, over } = event;
+  if (!over) {
+    console.warn('⛔ Drag ended but no valid drop target.');
+    return;
+  }
+
+  const activeData = active.data.current;
+  const overId = over.id.toString();
+
+  console.log('🎯 DragEnd Event:');
+  console.log('  Active ID:', active.id);
+  console.log('  Over ID:', overId);
+  console.log('  Active Data:', activeData);
+
+  // 🔹 Drag from Pool → Court Slot
+  if (activeData?.fromPool && overId.startsWith('slot-')) {
+    const [, courtStr, slotStr] = overId.split('-');
+    const courtNo = parseInt(courtStr);
+    const slotIndex = parseInt(slotStr);
+    const player = activeData.player;
+
+    if (!player || isNaN(courtNo) || isNaN(slotIndex)) {
+      console.error('❌ Invalid drop target or player');
       return;
     }
 
-    const selected = [...selectedMales, ...selectedFemales];
-    await saveMatchHistory(selected, court.courtNo, category, '21/09', '08:00');
-    setCourts(prev => prev.map(c => c.courtNo === court.courtNo ? { ...c, assigned: selected } : c));
-    setPlayers(prev => prev.filter(p => !selected.includes(p)));
-    toggleTimer(court.courtNo);
+    let replacedPlayer: Player | null = null;
+
+    setCourts(prev => {
+      return prev.map(court => {
+        if (court.courtNo !== courtNo) return court;
+        const existing = court.assigned[slotIndex];
+        replacedPlayer = existing ?? null;
+        const newAssigned = [...court.assigned];
+        newAssigned[slotIndex] = player;
+        return { ...court, assigned: newAssigned };
+      });
+    });
+
+    setPlayers(prev => {
+      const updated = prev.filter(p => p.id !== player.id);
+      if (replacedPlayer) updated.unshift(replacedPlayer);
+      return updated;
+    });
+
     return;
   }
 
-  // Step 4: Non-MX: group players by level
-  const high = eligiblePlayers.filter(p => p.avgScore >= 70);
-  const medium = eligiblePlayers.filter(p => p.avgScore >= 40 && p.avgScore < 70);
-  const low = eligiblePlayers.filter(p => p.avgScore < 40);
+  // 🔹 Drag within court
+  if (!activeData?.fromPool && overId.startsWith('slot-')) {
+    const [, courtStr, toIndexStr] = overId.split('-');
+    const courtNo = parseInt(courtStr);
+    const toIndex = parseInt(toIndexStr);
+    const { player, index: fromIndex } = activeData;
 
-  let selected =
-    level === 'High' ? [...high, ...medium, ...low] :
-    level === 'Medium' ? [...medium, ...high, ...low] :
-    [...low, ...medium, ...high];
+    if (isNaN(courtNo) || isNaN(fromIndex) || isNaN(toIndex)) {
+      console.error('❌ Invalid reorder indexes');
+      return;
+    }
 
-  selected = selected.slice(0, 4);
+    setCourts(prev =>
+      prev.map(c => {
+        if (c.courtNo !== courtNo) return c;
+        const newAssigned = [...c.assigned];
+        const temp = newAssigned[toIndex];
+        newAssigned[toIndex] = player;
+        newAssigned[fromIndex] = temp;
+        return { ...c, assigned: newAssigned };
+      })
+    );
 
-  if (selected.length < 4) {
-    toast.error('Not enough qualified players for Smart selection');
     return;
   }
 
-  await saveMatchHistory(selected, court.courtNo, category, '21/09', '08:00');
-  setCourts(prev => prev.map(c => c.courtNo === court.courtNo ? { ...c, assigned: selected } : c));
-  setPlayers(prev => prev.filter(p => !selected.includes(p)));
-  toggleTimer(court.courtNo);
-};
-
-// 🔁 Start  Stop function 
-
-
-
-const handleStartStop = async (courtNo: number, scores: Record<number, string>, courts: { courtNo: number; assigned: Player[] }[], setPlayers: any, setCourts: any, timer: Record<number, number>, toggleTimer: (courtNo: number) => void, isSmartMatch: boolean = false) => {
-  const assignedPlayers = courts.find(c => c.courtNo === courtNo)?.assigned || [];
-  const scoreValue = scores[courtNo];
-
-  if (!scoreValue || scoreValue === '00/00') {
-    const confirmNoSave = window.confirm('⚠️ Score not entered. Match history will not be saved. Proceed?');
-    if (!confirmNoSave) return;
-    setPlayers((prev: Player[]) => {
-      const remaining = [...prev];
-      return [...remaining, ...assignedPlayers];
-    });
-    setCourts((prev: any) => prev.map((c: any) => c.courtNo === courtNo ? { ...c, assigned: [] } : c));
-    toggleTimer(courtNo);
-    return;
-  }
-
-  const [scoreA, scoreB] = scoreValue.split('/').map(Number);
-  const [teamA, teamB] = assignedPlayers.length === 2
-    ? [[assignedPlayers[0]], [assignedPlayers[1]]]
-    : [assignedPlayers.slice(0, 2), assignedPlayers.slice(2)];
-
-  const winningTeam = scoreA > scoreB ? teamA : teamB;
-  const losingTeam = scoreA > scoreB ? teamB : teamA;
-
-  let matchType = 'MD';
-  if (assignedPlayers.length === 2) {
-    const [p1, p2] = assignedPlayers;
-    if (p1.gender === 'Male' && p2.gender === 'Male') matchType = 'MS';
-    else if (p1.gender === 'Female' && p2.gender === 'Female') matchType = 'WS';
-    else matchType = 'XD';
-  } else if (assignedPlayers.length === 4) {
-    const maleCount = assignedPlayers.filter(p => p.gender === 'Male').length;
-    const femaleCount = assignedPlayers.filter(p => p.gender === 'Female').length;
-    if (maleCount === 4) matchType = 'MD';
-    else if (femaleCount === 4) matchType = 'WD';
-    else matchType = 'XD';
-  }
-
-  const duration = `${String(Math.floor((timer[courtNo] || 0) / 60)).padStart(2, '0')}:${String((timer[courtNo] || 0) % 60).padStart(2, '0')}`;
-
-  await saveMatchHistory(assignedPlayers, courtNo, matchType, scoreValue, duration);
-  const sorted = [...winningTeam, ...losingTeam];
-  setPlayers((prev: Player[]) => {
-    const remaining = [...prev];
-    const updated = [...remaining, ...winningTeam, ...losingTeam];
-    return updated;
-  });
-  setCourts((prev: any) => prev.map((c: any) => c.courtNo === courtNo ? { ...c, assigned: [] } : c));
-  toggleTimer(courtNo);
-
-  // Show match summary toast with simple animation for winners
-  const winnerNames = winningTeam.map(p => p.name).join(' & ');
-  const loserNames = losingTeam.map(p => p.name).join(' & ');
-  toast.success(`✅ Match saved! 🏆 ${winnerNames} beat ${loserNames} (${scoreValue})`, {
-    autoClose: 5000,
-    position: 'top-center',
-    hideProgressBar: false,
-    closeOnClick: true,
-    pauseOnHover: true,
-    draggable: true
-  });
-
-  // 🎉 Visual Celebration
-if (isSmartMatch) {
-  const confettiContainer = document.createElement('div');
-  confettiContainer.id = 'confetti-wrapper';
-  confettiContainer.style.position = 'fixed';
-  confettiContainer.style.top = '0';
-  confettiContainer.style.left = '0';
-  confettiContainer.style.width = '100%';
-  confettiContainer.style.height = '100%';
-  confettiContainer.style.zIndex = '9999';
-  confettiContainer.style.pointerEvents = 'none';
-  document.body.appendChild(confettiContainer);
-
-  const lottie = document.createElement('div');
-  lottie.innerHTML = `<lottie-player
-    src="https://assets3.lottiefiles.com/packages/lf20_s3twlq2k.json"
-    background="transparent"
-    speed="1"
-    style="width: 220px; height: 220px; position: fixed; top: 25%; left: 50%; transform: translate(-50%, -50%); z-index: 10000"
-    autoplay
-    onerror="this.style.display='none'; document.getElementById('fallbackTrophy').style.display='block';"
-  ></lottie-player><div id="fallbackTrophy" style="display:none; text-align: center; color: #fff; font-weight: bold; font-size: 1.4rem; margin-top: 250px;">🏆 ${winnerNames}</div><div style="text-align: center; color: #fff; font-weight: bold; font-size: 1.2rem; margin-top: 250px;">🏆 ${winnerNames}</div>`;
-  document.body.appendChild(lottie);
-
-  import('canvas-confetti').then((confetti) => {
-    const myConfetti = confetti.default.create(confettiContainer, {
-      resize: true,
-      useWorker: true
-    });
-    myConfetti({ particleCount: 180, spread: 120, origin: { y: 0.5 } });
-
-    setTimeout(() => {
-      document.body.removeChild(confettiContainer);
-      document.body.removeChild(lottie);
-    }, 4500);
-  });
-} else {
-  import('canvas-confetti').then((confetti) => {
-    confetti.default({
-      particleCount: 100,
-      spread: 90,
-      origin: { y: 0.6 },
-      colors: ['#bbf7d0', '#facc15', '#fda4af']
-    });
-  });
+  // 💡 Drag from court back to pool (optional logic here)
+  console.log('🤔 Drag direction not handled:', { activeData, overId });
 };
 
 
 
-// 🧹 FIXED saveMatchHistory — now sends data to backend via fetch
- const saveMatchHistory = async (
-  assignedPlayers: Player[],
-  courtNo: number,
-  matchType: string,
-  score: string,
-  duration: string
-) => {
-  try {
-    const token = localStorage.getItem('token');
-    await fetch('http://localhost:5050/api/match-history', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({ assignedPlayers, courtNo, matchType, score, duration })
+
+  const toggleTimer = (courtNo: number) => {
+    setIntervals(prev => {
+      if (prev[courtNo]) {
+        clearInterval(prev[courtNo]);
+        const { [courtNo]: _, ...rest } = prev;
+        return rest;
+      } else {
+        return {
+          ...prev,
+          [courtNo]: setInterval(() => {
+            setTimer(t => ({ ...t, [courtNo]: (t[courtNo] || 0) + 1 }));
+          }, 1000)
+        };
+      }
     });
-  } catch (err) {
-    console.error('❌ Failed to save match history:', err);
-    toast.error('❌ Failed to save match history');
+  };
+  
+  const handleScoreChange = (courtNo: number, value: string) => {
+    console.log('📥 Typing Score for Court:', courtNo, '→', value);
+    setScores(prev => ({ ...prev, [courtNo]: value }));
+  };
+  
+  
+
+const formatTime = (seconds: number) => {
+  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const s = (seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}; 
+
+const addCourt = () => setCourts(prev => [...prev, { courtNo: prev.length + 1, assigned: [null, null, null, null] }]);
+
+const removeCourt = (index: number) => {
+  const courtNo = courts[index].courtNo;
+  setCourts(prev => prev.filter((_, i) => i !== index));
+  clearInterval(intervals[courtNo]);
+  const { [courtNo]: _, ...rest } = timer;
+  setTimer(rest);
+};
+
+// 📺 Fullscreen toggle
+useEffect(() => {
+  const handleChange = () => setIsFullscreen(!!document.fullscreenElement);
+  document.addEventListener('fullscreenchange', handleChange);
+  return () => document.removeEventListener('fullscreenchange', handleChange);
+}, []);
+
+const toggleFullscreen = () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(err => console.error(`❌ Fullscreen failed: ${err.message}`));
+  } else {
+    document.exitFullscreen();
   }
 };
 
-
+// 🏆 WinnerBoard auto-fetch with retry
+useEffect(() => {
+  const fetchSummary = async () => {
+    const clubId = localStorage.getItem('clubId');
+    const today = new Date().toISOString().split('T')[0];
+    if (!clubId || clubId.length < 24) return;
+    try {
+      await new Promise(res => setTimeout(res, 500));
+      let retries = 3;
+      let data = null;
+      while (retries--) {
+        const res = await fetch(`http://localhost:5050/api/matchSummary?clubId=${clubId}&date=${today}`);
+        if (res.ok) {
+          data = await res.json();
+          break;
+        }
+        await new Promise(res => setTimeout(res, 300));
+      }
+      if (!data?.summary) console.warn('⚠️ No summary after retries');
+    } catch (err) {
+      console.error('❌ Summary fetch error:', err);
+    }
+  };
+  fetchSummary();
+}, [refreshWinnerKey]);
+  //Add Guest Player
+  const guestCounters = useRef({ Male: 1, Female: 1 });
+ 
+  const [guestNameInput, setGuestNameInput] = useState('');
+  
+  const addGuestPlayer = () => {
+    if (!guestGender) return;
+    const index = guestCounters.current[guestGender]++;
+    const guestId = `guest_${guestGender.toLowerCase()}_${index}`;
+    const name = guestNameInput.trim();
+    const guestName = name
+      ? `Guest - ${name}`
+      : `Guest ${guestGender} ${index}`;
+    setPlayers(prev => [...prev, { id: guestId, name: guestName, gender: guestGender }]);
+    setShowGuestDialog(false);
+    setGuestNameInput('');
+    setGuestGender(null);
+    toast.success(`${guestName} added to the pool.`);
+  };
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-100 to-indigo-100 p-6">
+    <DndContext
+    collisionDetection={closestCenter}
+    onDragEnd={handleDragEnd}
+  >
+    
+    <div className={`min-h-screen bg-gradient-to-br from-blue-100 to-indigo-100 p-6 relative transition-all duration-300 ${isFullscreen ? 'fixed inset-0 z-50 bg-white overflow-y-auto' : ''}`}>
       <ToastContainer />
-
+      {/* 📌 Fullscreen Toggle UI */}
+      <AnimatePresence>
+        {isFullscreen ? (
+          <motion.button
+            key="exit"
+            onClick={toggleFullscreen}
+            className="fixed top-4 right-4 z-50 bg-yellow-300 hover:bg-yellow-400 text-yellow-900 p-3 rounded-full shadow-xl"
+            title="Exit Fullscreen"
+          >
+            <X className="w-5 h-5" />
+          </motion.button>
+        ) : (
+          <motion.button
+            key="enter"
+            onClick={toggleFullscreen}
+            className="absolute top-4 right-4 z-50 bg-white p-2 rounded-full shadow hover:scale-105"
+            title="Enter Fullscreen"
+          >
+            <Maximize2 className="w-5 h-5 text-indigo-600" />
+          </motion.button>
+        )}
+      </AnimatePresence>
+  
       {/* Banner */}
-<div className="relative w-full h-[180px] bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-600 rounded-b-[60px] flex flex-col justify-center items-center shadow-lg">
-  <h1 className="text-5xl font-extrabold text-white drop-shadow">SmashHub</h1>
-  <h2 className="text-2xl text-white/90 font-medium">Smart Peg Board</h2>
-</div>
-{/* Floating Smart Select Button */}
-<button
-  onClick={() => setShowMatchPopup(true)}
-  className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-5 py-3 rounded-full shadow-xl hover:scale-105 transition-all"
->
-  + Smart Select
-</button>
+      <div className="relative w-full h-[180px] bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-600 rounded-b-[60px] flex flex-col justify-center items-center shadow-lg">
+        <h1 className="text-5xl font-extrabold text-white drop-shadow">SmashHub</h1>
+        <h2 className="text-2xl text-white/90 font-medium">Smart Peg Board</h2>
+      </div>
+  
+      {/* 🏆 Winner Board Display */}
+      <WinnerBoard refreshKey={refreshWinnerKey} />
 
-{/* Smart Selection Popup */}
-{showMatchPopup && (
-  <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center">
-    <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl shadow-2xl max-w-md w-full">
-      {!selectedCategory ? (
-        <>
-          <h3 className="text-xl font-semibold mb-4 text-center">Choose Match Category</h3>
-          <div className="flex justify-around mb-4">
-            {["MS", "WS", "MD", "WD", "XD"].map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-white font-bold text-lg shadow-lg"
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-          <div className="text-center">
-            <button onClick={() => setShowMatchPopup(false)} className="text-sm text-gray-600 hover:underline">Cancel</button>
-          </div>
-        </>
-      ) : !selectionMode ? (
-        <>
-          <h3 className="text-xl font-semibold mb-4 text-center">Choose Assignment Mode</h3>
-          <div className="flex justify-around mb-4">
-            {['Auto', 'Smart'].map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setSelectionMode(mode as 'Auto' | 'Smart')}
-                className="px-4 py-2 rounded-full bg-purple-500 text-white font-medium shadow-md"
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-          <div className="text-center">
-            <button onClick={() => { setSelectedCategory(null); setShowMatchPopup(false); }} className="text-sm text-gray-600 hover:underline">Cancel</button>
-          </div>
-        </>
-      ) : selectionMode === 'Smart' && !smartLevel ? (
-        <>
-          {/* Check if top 8 players (excluding guests) have at least 5 matches */}
-          {players.filter(p => !p.id.startsWith('guest')).slice(0, 8).every(p => p.matchCount >= 5) ? (
-            <>
-              <h3 className="text-xl font-semibold mb-4 text-center">Competitive Level</h3>
-              <div className="flex justify-around mb-4">
-                {['High', 'Medium', 'Low'].map((level) => (
-                  <button
-                    key={level}
-                    onClick={() => setSmartLevel(level as 'High' | 'Medium' | 'Low')}
-                    className="px-4 py-2 rounded-full bg-purple-500 text-white font-medium shadow-md"
-                  >
-                    {level}
-                  </button>
-                ))}
-              </div>
-              <div className="text-center">
-                <button onClick={() => { setSelectedCategory(null); setSelectionMode(null); setShowMatchPopup(false); }} className="text-sm text-gray-600 hover:underline">Cancel</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="text-red-600 text-center font-medium mb-4">Players in the pool (except guest) should have played at least 5 matches to use Smart Selection.</p>
-              <div className="flex justify-around">
-                <button onClick={() => setSelectionMode('Auto')} className="px-4 py-2 bg-blue-500 text-white rounded-full">Choose Auto</button>
-                <button onClick={() => { setSelectedCategory(null); setSelectionMode(null); setShowMatchPopup(false); }} className="text-sm text-gray-600 hover:underline">Cancel</button>
-              </div>
-            </>
-          )}
-        </>
-      ) : (
-        <>
-          <h3 className="text-xl font-semibold text-center mb-3">Confirm Assignment</h3>
-          <p className="text-center mb-6">Category: <strong>{selectedCategory}</strong> <br /> Mode: <strong>{selectionMode}</strong> {smartLevel && <><br /> Level: <strong>{smartLevel}</strong></>}</p>
-          <div className="flex justify-around">
-            <button
-              className="px-6 py-2 bg-green-500 text-white rounded-full shadow hover:bg-green-600"
-              onClick={() => {
-                if (selectionMode === 'Auto') handleAutoAssign(selectedCategory);
-                else handleSmartAssign(selectedCategory, smartLevel!);
-                setShowMatchPopup(false);
-                setSelectedCategory(null);
-                setSmartLevel(null);
-                setSelectionMode(null);
-              }}
-            >
-              Confirm
-            </button>
-            <button
-              className="text-sm text-gray-600 hover:underline"
-              onClick={() => {
-                setSelectedCategory(null);
-                setSmartLevel(null);
-                setSelectionMode(null);
-                setShowMatchPopup(false);
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </>
-      )}
+<FloatingActions
+  onSmartSelect={() => setShowSmartAssignModal(true)}
+    onAddCourt={addCourt}
+    onAddGuest={() => {
+      setGuestGender(null);
+      setGuestNameInput('');
+      setShowGuestDialog(true);
+    }
+  }/>
+      {/* SmartAssignModal (centralized)  */}
+
+<SmartAssignModal
+  show={showSmartAssignModal}
+  players={players}
+  courts={courts}
+  suggestedPlayers={suggestedPlayers}
+  setSuggestedPlayers={setSuggestedPlayers}
+  onClose={() => setShowSmartAssignModal(false)}
+  onRedoAuto={prefillAutoPlayers}
+  onConfirm={handleConfirmTeamAssign}
+/>
+
+{showCategoryDialog && (
+  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+    <div className="bg-white p-6 rounded-2xl shadow-xl w-80 space-y-4">
+      <h2 className="text-xl font-bold text-center">Select Match Category</h2>
+      <div className="grid grid-cols-3 gap-3">
+        {['MS', 'WS', 'MD', 'WD', 'XD'].map(cat => (
+          <button
+            key={cat}
+            onClick={() => {
+              setSelectedCategory(cat);
+              setShowCategoryDialog(false);
+              fetchSuggestedTeams(cat);
+            }}
+            className="py-2 bg-indigo-500 text-white rounded-lg shadow hover:bg-indigo-600"
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+      <button onClick={() => setShowCategoryDialog(false)} className="text-sm text-gray-500 hover:underline text-center w-full">Cancel</button>
     </div>
   </div>
 )}
 
 
-        <div className="flex gap-6">  
-  {/* Player Pool */}
-  <div className="w-[280px] max-h-[calc(100vh-200px)] overflow-y-auto bg-white rounded-xl shadow-lg p-4">
-    <h3 className="text-lg font-semibold text-gray-700 mb-4">Player Pool</h3>
-    <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={players.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-        {players.map((player) => (
-          <SortablePlayer key={player.id} {...player} />
-        ))}
-      </SortableContext>
-    </DndContext>
+  {/* Layout */}
+  <div className="flex flex-col lg:flex-row gap-6 mt-6">
+  <PlayerPool
+  players={players}
+  onReorder={(from, to) => {
+    setPlayers(prev => {
+      const updated = [...prev];
+      const [moved] = updated.splice(from, 1);
+      updated.splice(to, 0, moved);
+      return updated;
+    });
+  }}
+  onDropFromCourt={(player, index) => {
+    setPlayers(prev => {
+      const without = prev.filter(p => p.id !== player.id);
+      const updated = [...without];
+      updated.splice(index, 0, player);
+      return updated;
+    });
+
+    setCourts(prev =>
+      prev.map(c => ({
+        ...c,
+        assigned: c.assigned.map(p => (p?.id === player.id ? null : p)),
+      }))
+    );
+  }}
+/>
+
+
+      <div className="flex-1 overflow-x-auto">
+        <div className="flex flex-wrap justify-center gap-6">
+        {courts.map(({ courtNo, assigned }, index) => (
+  <div key={courtNo} className="relative" id={`court-${courtNo}`}>
+    <CourtCard
+      courtNo={courtNo}
+      assigned={assigned}
+      score={scores[courtNo] || ''}
+      onScoreChange={(value) => handleScoreChange(courtNo, value)}
+      onStartStop={() => {
+        if (!intervals[courtNo]) {
+          toggleTimer(courtNo);
+          toast.info(`🕒 Match started on Court ${courtNo}`, { position: 'bottom-center' });
+        } else {
+          handleStartStopMatch({
+            courtNo,
+            courts,
+            scores,
+            timer,
+            setPlayers,
+            setCourts,
+            toggleTimer,
+            setRefreshWinnerKey,
+            onWin: (team) => {
+              setWinningTeam(team);
+              setWinningCourt(courtNo); // Track the winning court here
+            },
+            onScoreChange: (val) => handleScoreChange(courtNo, val) // ✅ Pass reset logic
+          });
+        }
+      }}
+      isRunning={!!intervals[courtNo]}
+      time={formatTime(timer[courtNo] || 0)}
+      onRemoveCourt={() => removeCourt(index)}
+      onDropPlayer={(slotIndex, player) => handleDropToCourt(courtNo, slotIndex, player)}
+    />
+
+    {winningTeam && winningCourt === courtNo && (
+      <ConfettiEffect
+        winnerNames={winningTeam.map(p => p.name).join(' & ')}
+        containerId={`court-${courtNo}`}
+        onComplete={() => {
+          setWinningTeam(null);
+          setWinningCourt(null);
+        }}
+      />
+    )}
   </div>
+))}
 
 
-
-{/* Court Section */}
-<div className="flex-1 overflow-x-auto">
-  <div className="flex flex-wrap gap-6">
-    {courts.map(({ courtNo, assigned }, index) => (
-      <div
-        key={courtNo}
-        className="min-w-[320px] w-[320px] relative rounded-2xl shadow-2xl border-4 border-indigo-900 bg-gradient-to-br from-blue-600 to-fuchsia-600 overflow-hidden transform hover:scale-105 transition-all duration-300"
-      >
-        {/* Remove Court Button */}
-        <div className="absolute top-3 right-3 z-10">
-          <button
-            onClick={() => removeCourt(index)}
-            className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 text-sm rounded-full shadow-lg"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Court Header */}
-        <div className={`text-white font-bold text-xl text-center py-3 border-b-2 ${assigned.length === 0 ? 'bg-green-700' : 'bg-red-700'} border-white/20`}>
-          🏸 Court {courtNo}{' '}
-          {assigned.length === 4 && (
-            <span className="ml-2 text-yellow-200 animate-pulse">(In Play)</span>
-          )}
-        </div>
-
-        {/* Court Layout */}
-        <div className="relative h-[440px]">
-          <div className="absolute top-3 bottom-3 left-0 right-0 bg-gradient-to-br from-blue-500/90 to-fuchsia-500/90">
-
-            {/* Net & Lines */}
-            <div className="absolute top-0 bottom-0 left-1/2 w-[4px] bg-white/90 -translate-x-1/2 shadow-sm"></div>
-            <div className="absolute top-[0%] w-full h-[3px] bg-white/90 shadow"></div>
-            <div className="absolute top-[8%] w-full h-[3px] bg-white/90 shadow"></div>
-            <div className="absolute top-[40%] w-full h-[3px] bg-white/90"></div>
-            <div className="absolute top-[60%] w-full h-[3px] bg-white/90"></div>
-            <div className="absolute top-[92%] w-full h-[2px] bg-white/80"></div>
-            <div className="absolute top-[100%] w-full h-[2px] bg-white/80"></div>
-            <div className="absolute left-[10%] top-0 bottom-0 w-[6px] bg-yellow-400/90 shadow-[0_0_6px_1px_rgba(250,250,0,0.7)]"></div>
-            <div className="absolute right-[10%] top-0 bottom-0 w-[6px] bg-yellow-400/90 shadow-[0_0_6px_1px_rgba(250,250,0,0.7)]"></div>
-
-            {/* Player Slots Grid */}
-            <div className="absolute inset-0 grid grid-rows-2">
-              <div className="flex border-b-2 border-white/40">
-                <div className="flex-1 h-full border-r border-white/40 flex items-center justify-center pt-4">
-                  <PlayerSlot player={assigned[0] || null} />
-                </div>
-                <div className="flex-1 h-full flex items-center justify-center pt-4">
-                  <PlayerSlot player={assigned[1] || null} />
-                </div>
-              </div>
-              <div className="flex">
-                <div className="flex-1 h-full border-r border-white/40 flex items-center justify-center pt-4">
-                  <PlayerSlot player={assigned[2] || null} />
-                </div>
-                <div className="flex-1 h-full flex items-center justify-center pt-4">
-                  <PlayerSlot player={assigned[3] || null} />
-                </div>
-              </div>
-            </div>
-
-            {/* Score & Timer Controls */}
-            <div className="absolute bottom-10 left-3">
-              <input
-                type="text"
-                className="rounded px-2 py-1 text-sm"
-                value={scores[courtNo] || ''}
-                onChange={(e) => handleScoreChange(courtNo, e.target.value)}
-                placeholder="Enter Score (e.g., 21/18)"
-              />
-            </div>
-            <div className="absolute bottom-10 right-3">
-              <Button
-                size="sm"
-                onClick={() => handleStartStop(courtNo)}
-                className="bg-white/90 text-indigo-900"
-              >
-                {intervals[courtNo] ? `Stop (${formatTime(timer[courtNo] || 0)})` : 'Start'}
-              </Button>
-            </div>
-          </div>
         </div>
       </div>
-    ))}
-  </div>
-</div>
-
-</div>
-
     </div>
+
+
+   
+    </div>
+     </DndContext>
   );
-}
-};
+ }  

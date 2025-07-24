@@ -112,6 +112,8 @@ npm install bcrypt  // to encryp password
 npm install mongoose bcrypt jsonwebtoken @types/bcrypt @types/jsonwebtoken  -  for password encryption  and session token 
 npm install nodemailer
 npm install --save-dev @types/nodemailer
+npm install bcryptjs
+npm install --save-dev @types/bcryptjs
 
 
 npm install    ( install depedencied) 
@@ -204,7 +206,7 @@ git add filename.ext              # Stage specific file
 # OR
 git add folder/                   # Stage specific folder
 
-git commit -m "updated Smart pegboard,Player attendance and Finance Dashboard"
+git commit -m "updated Smart pegboard,Club Ledger, Access Control, Captains  Squad"
 git push origin main
 
 

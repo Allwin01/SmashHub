@@ -20,6 +20,10 @@ export default function MemberAccess({ showName = true, formatName }) {
           },
         });
         const data = await res.json();
+
+        
+
+
         const filtered = filterMemberUsers(data).map(player => ({
           ...player,
           name: formatName ? formatName(player) : '',
@@ -39,6 +43,12 @@ export default function MemberAccess({ showName = true, formatName }) {
 
     fetchPlayers();
   }, [formatName]);
+
+
+
+  
+
+
 
   return <UserTable users={users} type="member" showName={showName} />;
 }

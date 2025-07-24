@@ -49,9 +49,9 @@ app.use('/api/clubs', clubRoutes);
 app.use('/api/players', authenticateJWT, playerRoutes);
 app.use('/api/coaches', coachRoutes);
 app.use('/api', emailReportRoute);
-
 app.use('/api', matchHistoryRoutes);
-app.use('/api/matchSummary', matchSummaryRoutes); 
+app.use('/api/matchSummary', matchSummaryRoutes);
+//app.use('/api', matchHistoryRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/user', userthemeRoutes);
 

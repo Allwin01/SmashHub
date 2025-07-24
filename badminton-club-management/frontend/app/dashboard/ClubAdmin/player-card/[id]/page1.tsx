@@ -1,33 +1,23 @@
+
 'use client';
 import { Poppins, Fredoka, Nunito, Quicksand } from 'next/font/google';
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+//import { Card, CardContent } from '@/components/ui/card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+
+import { Select, SelectTrigger, SelectContent, SelectItem } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Image from 'next/image';
 import ShuttleSlider from '@/components/ui/ShuttleSlider';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import SkillReportCardWrapper from '@/components/SkillReportCardWrapper';
-import { ChevronDown, ChevronUp,Trophy, Users, Medal, ThumbsUp,Percent,CirclePie,BarChart2 } from 'lucide-react';
-import { Select, SelectTrigger, SelectContent, SelectItem } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import 'react-toastify/dist/ReactToastify.css';
-import { calculateStats } from '@/utils/playerStats';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
-
-
-
-interface Match {
-  date: string;
-  category: string;
-  result: string;
-  partner: string;
-  opponents: string[];
-}
 
 interface PlayerDetails {
   _id: string;
@@ -35,8 +25,8 @@ interface PlayerDetails {
   surName: string;
   email: string;
   dob: string;
-  sex: string;
-  isJunior: boolean;
+  sex: string; 
+  isJunior: boolean;  
   parentName?: string;
   parentPhone?: string;
   emergencyContactname: string;
@@ -51,7 +41,6 @@ interface PlayerDetails {
   profileImage?: string;
   skillMatrix?: Record<string, number>;
   skillHistory?: any;
-  skillTracking?: boolean;
 }
 
 const poppins = Poppins({
@@ -79,19 +68,17 @@ export const quicksand = Quicksand({
 });
 
 const skillGroups: Record<string, string[]> = {
-  'Movement Phases': ['Split-Step', 'Chasse Step', 'Lunging', 'Jumping'],
-  'Grips & Grip Positions': ['Basic Grip', 'Panhandle', 'Bevel', 'Thumb Grip', 'Grip Adjustment'],
-  'Forehand Strokes': ['Clear', 'Drop Shot', 'Smash', 'Slice Drop', 'Lift (Underarm)', 'Net Drop (Underarm)'],
-  'Backhand Strokes': ['Clear (Backhand)', 'Drop Shot (Backhand)', 'Lift (Backhand)', 'Net Drop (Backhand)'],
-  'Serve Techniques': ['Low Serve', 'High Serve', 'Flick Serve', 'Drive Serve'],
-  'Footwork & Speed': ['6-Corner Footwork', 'Shadow Footwork', 'Pivot & Rotation', 'Recovery Steps'],
-};
-
-
+    'Movement Phases': ['Split-Step', 'Chasse Step', 'Lunging', 'Jumping'],
+    'Grips & Grip Positions': ['Basic Grip', 'Panhandle', 'Bevel', 'Thumb Grip', 'Grip Adjustment'],
+    'Forehand Strokes': ['Clear', 'Drop Shot', 'Smash', 'Slice Drop', 'Lift (Underarm)', 'Net Drop (Underarm)'],
+    'Backhand Strokes': ['Clear (Backhand)', 'Drop Shot (Backhand)', 'Lift (Backhand)', 'Net Drop (Backhand)'],
+    'Serve Techniques': ['Low Serve', 'High Serve', 'Flick Serve', 'Drive Serve'],
+    'Footwork & Speed': ['6-Corner Footwork', 'Shadow Footwork', 'Pivot & Rotation', 'Recovery Steps'],
+  };
 
 export default function PlayerDetailPage() {
+  
 
-  const [matches, setMatches] = useState<Match[]>([]);
   const [player,  setPlayer] = useState<PlayerDetails | null>(null);   //Stores the full player object fetched from the backend.
   const [coaches, setCoaches] = useState<string[]>([]);  //Stores a list of coach names as strings.
   const { id } = useParams();   // Extracts the id from the URL — e.g., /players/[id]
@@ -109,15 +96,15 @@ export default function PlayerDetailPage() {
   const reportRef = useRef<HTMLDivElement>(null);
   const isExporting = useRef(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-  const [statsCollapsed, setStatsCollapsed] = useState(true);
+
+const toggleGroup = (group: string) => {
+  setExpandedGroups((prev) => ({
+    ...prev,
+    [group]: !prev[group],
+  }));
+};
 
 
-  const toggleGroup = (group: string) => {
-    setExpandedGroups((prev) => ({
-      ...prev,
-      [group]: !prev[group],
-    }));
-  };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -125,39 +112,45 @@ export default function PlayerDetailPage() {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setUserRole(payload.role || '');
+        
+
       } catch (err) {
         console.error('⚠️ Failed to decode token:', err);
       }
     }
   }, []);
+  
 
-    // Skill flatten and nested to send group header and skills when submitted
-    const flattenSkills = (nested: any): Record<string, number> => {
-      const flat: Record<string, number> = {};
-      if (!nested || typeof nested !== 'object') return flat;
-      for (const category in nested) {
-        const group = nested[category];
-        if (typeof group === 'object') {
-          for (const skill in group) {
-            flat[skill] = group[skill];
-          }
+  // Skill flatten and nested to send group header and skills when submitted
+  const flattenSkills = (nested: any): Record<string, number> => {
+    const flat: Record<string, number> = {};
+    if (!nested || typeof nested !== 'object') return flat;
+    for (const category in nested) {
+      const group = nested[category];
+      if (typeof group === 'object') {
+        for (const skill in group) {
+          flat[skill] = group[skill];
         }
       }
-      return flat;
-    };
+    }
+    return flat;
+  };
+  
+{/*This useEffect runs whenever player changes, and its job is to:
+Populate the editable form fields (setForm) excluding skillMatrix
+Initialize the skill slider state with values from the database (setSkills) */} 
 
-  useEffect(() => {
+
+useEffect(() => {
     const fetchPlayer = async () => {
       try {
         const token = localStorage.getItem('token');
         const res = await fetch(`http://localhost:5050/api/players/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (!res.ok) throw new Error('Failed to fetch player');
         const data = await res.json();
-  
-        console.log('🎯 Player fetched:', data); // 👈 Add this
         setPlayer(data);
-       
         const flatSkills = flattenSkills(data.skillMatrix);       // - This stores the entire player object fetched from the database into state.
             setSkills(flatSkills);    //This stores the current skill ratings from the database into the skills state, which is bound to your sliders in the UI.
             setInitialSkills(flatSkills);  //This stores a snapshot of the original skills when the profile loads.Detect changes in slider values
@@ -184,20 +177,15 @@ export default function PlayerDetailPage() {
           playerType: data.playerType,
           clubRoles: data.clubRoles || [],
           level: data.level || '',
-          skillTracking: data.skillTracking,
           profileImage: data.profileImage || ''
         });
-     
-     
-     
       } catch (err) {
         console.error(err);
       }
     };
     fetchPlayer();
   }, [id]);
-  
-
+    
 
   useEffect(() => {
     const fetchCoaches = async () => {
@@ -338,6 +326,7 @@ const handleDeletePlayer = async () => {
   };
 
   const handleSkillMatrixSave = async () => {
+    
     const changedSkills: Record<string, number> = {};
     for (const key in skills) {
       if (skills[key] !== initialSkills[key]) {
@@ -369,6 +358,8 @@ const handleDeletePlayer = async () => {
         return grouped;
       };
       
+
+  
   try {
     const token = localStorage.getItem('token');
   
@@ -432,6 +423,8 @@ const handlePDFExport = async () => {
   }, 500);
 };
 
+
+
 //Coach Commant 
 
   const handleSaveComment = async () => {
@@ -457,14 +450,18 @@ const handlePDFExport = async () => {
   };
 
 
-  useEffect(() => {
+  useEffect (() => {
     const fetchComment = async () => {
       if (!player?._id) return;
+  
       const token = localStorage.getItem('token');
       try {
         const res = await fetch(`http://localhost:5050/api/players/${id}/comment`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+  
+        if (!res.ok) throw new Error('Failed to fetch comment');
+  
         const data = await res.json();
         if (data?.coachComment !== undefined) {
           setCoachComment(data.coachComment);
@@ -473,35 +470,11 @@ const handlePDFExport = async () => {
         console.error('❌ Error fetching coach comment:', err);
       }
     };
+  
     fetchComment();
   }, [player?._id]);
 
-  useEffect(() => {
-    const fetchMatches = async () => {
-      if (!id) return;
-      const token = localStorage.getItem('token');
-      console.log('📡 Fetching matches for ID:', id);  // ✅ extra debug
-  
-      try {
-        const res = await fetch(`http://localhost:5050/api/matchs/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-  
-        if (!res.ok) throw new Error(`HTTP ${res.status} - ${res.statusText}`);
-  
-        const data = await res.json();
-        console.log('🎯 Match history fetched:', data);  // ✅ debug
-        setMatches(data);
-      } catch (err) {
-        console.error('❌ Error fetching match data:', err);
-      }
-    };
-    fetchMatches();
-  }, [id]);
-  
-  
-  
-
+  if (!player || !form) return <div className="p-6">Loading...</div>;
 
 
 
@@ -520,7 +493,14 @@ const handlePDFExport = async () => {
 
   const excludedKeys = ['_id', 'profileImage', 'clubId', '__v', 'createdAt', 'updatedAt', 'isAdult', 'skillMatrix', 'skillHistory'];
 
-
+  const skillGroups: Record<string, string[]> = {
+    'Movement Phases': ['Split-Step', 'Chasse Step', 'Lunging', 'Jumping'],
+    'Grips & Grip Positions': ['Basic Grip', 'Panhandle', 'Bevel', 'Thumb Grip', 'Grip Adjustment'],
+    'Forehand Strokes': ['Clear', 'Drop Shot', 'Smash', 'Slice Drop', 'Lift (Underarm)', 'Net Drop (Underarm)'],
+    'Backhand Strokes': ['Clear (Backhand)', 'Drop Shot (Backhand)', 'Lift (Backhand)', 'Net Drop (Backhand)'],
+    'Serve Techniques': ['Low Serve', 'High Serve', 'Flick Serve', 'Drive Serve'],
+    'Footwork & Speed': ['6-Corner Footwork', 'Shadow Footwork', 'Pivot & Rotation', 'Recovery Steps'],
+  };
 
   console.log('🧪 userRole:', userRole);
 
@@ -529,211 +509,55 @@ const handlePDFExport = async () => {
     setShowSkillReport(true);
   };
   
-
-  const stats = useMemo(() => matches.length ? calculateStats(matches) : {
-    totalMatches: 0,
-    totalWins: 0,
-    xdWins: 0,
-    mdWins: 0,
-    bestMdPartner: null,
-    bestXdPartner: null,
-  }, [matches]);
-
-  const winPercent = stats.totalMatches > 0 ? Math.round((stats.totalWins / stats.totalMatches) * 100) : 0;
-
-  if (!player) return <div className="p-6">Loading...</div>;
-
+ 
   return (
-    <div className="p-6 space-y-4">
+    <div className="pt-2 px-6 pb-6 space-y-6">
       <ToastContainer position="top-right" autoClose={2000} />
-
-     {/*} <div className="flex flex-col lg:flex-row items-center gap-6"> */}
-
-
-     <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
-        {/* 🆕 Stats block in 3 rows layout with center-aligned text */}
-        <div className="w-full lg:w-2/3 order-2 lg:order-1">
-          <button
-            className="text-blue-600 underline mb-2 lg:hidden"
-            onClick={() => setStatsCollapsed(!statsCollapsed)}
-          >
-            {statsCollapsed ? 'Show Stats' : 'Hide Stats'}
-          </button>
-
-          <div className={`bg-gradient-to-br from-blue-100 to-blue-300 text-blue-900 px-6 py-4 rounded-md shadow-md text-base ${statsCollapsed ? 'hidden' : ''} lg:block`}>
-            <div className="space-y-4 text-center">
-              <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-                <p className="flex items-center gap-2 text-lg"><Trophy className="w-6 h-6 text-yellow-600" /><strong>Total Matches:</strong> {stats.totalMatches}</p>
-                <p className="flex items-center gap-2 text-lg"><ThumbsUp className="w-6 h-6 text-green-600" /><strong>Total Wins:</strong> {stats.totalWins}</p>
-                <p className="flex items-center gap-2 text-lg"><BarChart2 className="w-6 h-6 text-blue-600" /><strong>Win %:</strong> {winPercent}%</p>
-              </div>
-              <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-                <p className="flex items-center gap-2 text-lg"><Medal className="w-6 h-6 text-indigo-600" /><strong>Wins in XD:</strong> {stats.xdWins}</p>
-                <p className="flex items-center gap-2 text-lg"><Medal className="w-6 h-6 text-indigo-600" /><strong>Wins in MD:</strong> {stats.mdWins}</p>
-              </div>
-              <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 animate-pulse">
-                <p className="text-blue-800 text-lg"><strong>Best MD Partner:</strong> {stats.bestMdPartner || '-'}</p>
-                <p className="text-blue-800 text-lg"><strong>Best XD Partner:</strong> {stats.bestXdPartner || '-'}</p>
-              </div>
-            </div>
+  
+      {/* Fixed Player Header Section */}
+      <div className="sticky top-0 z-30 bg-white pb-6 pt-6 px-6 shadow-lg rounded-lg">
+  <section className="flex flex-col lg:flex-row items-center lg:items-start gap-6">
+    <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-blue-600 shadow">
+            <Image
+              src={player.profileImage || (player.sex === 'Female' ? '/Avatar-female.png' : '/Avatar-male.png')}
+              alt={player.firstName || 'Profile'}
+              width={112}
+              height={112}
+              className="object-cover w-full h-full"
+            />
           </div>
-        </div>
-
-        <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-blue-600 shadow">
-          <Image
-            src={player.profileImage || (player.sex === 'Female' ? '/Avatar-female.png' : '/Avatar-male.png')}
-            alt={player.firstName || 'Profile'}
-            width={112}
-            height={112}
-            className="object-cover w-full h-full"
-          />
-        </div>
-       
-       {/* 👤 Profile + Meta */}
-       <div className="flex gap-4 items-center">
           <div>
             <h2 className={`${nunito.variable} text-5xl font-bold text-blue-600 leading-tight`}>{form.firstName} {form.surName}</h2>
             <p className="text-lg text-gray-700 font-mono">Level: {form.level || 'N/A'}</p>
             <p className="text-lg text-gray-700 font-mono">Membership Status: {form.membershipStatus}</p>
-            {(form.playerType === 'Coaching and Club Member' || form.playerType === 'Junior Club Member') && (
+            {(form.playerType === 'Coaching and Club Member' || form.playerType === 'Coaching only') && (
               <p className="text-lg text-gray-700 font-mono">Coach Name: {form.coachName || 'N/A'}</p>
             )}
-          
           </div>
-        </div>
-
-
-        {/* 🆕 Stats block moved to top-right, responsive and collapsible 
-        <div className="w-full lg:w-1/2 lg:items-start">
-          <button
-            className="text-blue-600 underline mb-2 lg:hidden"
-            onClick={() => setStatsCollapsed(!statsCollapsed)}
-          >
-            {statsCollapsed ? 'Show Stats' : 'Hide Stats'}
-          </button>
-
-          <div className={`bg-gradient-to-br from-blue-100 to-blue-300 text-blue-900 px-6 py-2 rounded-md shadow-md text-sm ${statsCollapsed ? 'hidden' : ''} lg:block`}> 
-            <div className="flex flex-wrap gap-x-4 gap-y-1 items-center justify-start lg:justify-end">
-              <p className="flex items-center gap-1"><Trophy className="w-4 h-4 text-yellow-600" /><strong>Total Matches:</strong> {stats.totalMatches}</p>
-              <p className="flex items-center gap-1"><ThumbsUp className="w-4 h-4 text-green-600" /><strong>Total Wins:</strong> {stats.totalWins}</p>
-              <p className="flex items-center gap-1"><Percent className="w-4 h-4 text-blue-600" /><strong>Win %:</strong> {winPercent}%</p>
-              <p className="flex items-center gap-1"><Medal className="w-4 h-4 text-indigo-600" /><strong>Wins in XD:</strong> {stats.xdWins}</p>
-              <p className="flex items-center gap-1"><Medal className="w-4 h-4 text-indigo-600" /><strong>Wins in MD:</strong> {stats.mdWins}</p>
-              <p className="animate-pulse text-blue-800"><strong>Best MD Partner:</strong> {stats.bestMdPartner || '-'}</p>
-              <p className="animate-pulse text-blue-800"><strong>Best XD Partner:</strong> {stats.bestXdPartner || '-'}</p>
-            </div>
-          </div>
-        </div>   */}
-      </div>
-      
-      
-      
-
-      <div className="flex gap-2 flex-wrap">
-      <Button onClick={() => setShowDialog(true)}>Edit Personal Details</Button>
-      {(normalizedRole === 'ClubAdmin' || normalizedRole === 'SuperAdmin') && (
+        </section>
+  
+        <div className="flex justify-end flex-wrap gap-2 mt-4">
+          <Button onClick={() => setShowDialog(true)}>Edit Personal Details</Button>
+          <Button className="ml-2" onClick={handleSkillMatrixSave}>Save Skill Matrix</Button>
+          <Button className="ml-2" onClick={handleSkillReportOpen}>Skill Export View</Button>
+          <Button onClick={handlePDFExport}>📥 Export PDF</Button>
+          {(normalizedRole === 'ClubAdmin' || normalizedRole === 'SuperAdmin') && (
             <Button variant="destructive" className="ml-2" onClick={() => setShowDeleteConfirm(true)}>
               Delete Player
             </Button>
-      )}
-        {player.skillTracking && (
-          <>
-           
-            {/* <Button onClick={() => setShowSkillReport(true)}>Skill Export View</Button> */}
-            <Button className="ml-2" onClick={handleSkillMatrixSave}>Save Skill Matrix</Button>
-          <Button className="ml-2" onClick={handleSkillReportOpen}>Skill Export View</Button>
-            <Button onClick={handlePDFExport}>📥 Export PDF</Button>
-          </>
-        )}
-      </div>  
-
-
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-  <DialogContent>
-    <DialogHeader>
-      <DialogTitle>Edit Personal Details</DialogTitle>
-    </DialogHeader>
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> 
-
-    {Object.entries(form).map(([key, val]) => {
-  if (excludedKeys.includes(key)) return null;
-
-  // Handle isJunior as a checkbox (must go before the generic return)
-  if (key === 'isJunior') {
-    return (
-      <div key={key} className="flex items-center gap-2">
-        <label className="text-sm font-medium">Is Junior</label>
-        <Checkbox
-          checked={form.isJunior}
-          onCheckedChange={(val) => handleCheckboxChange('isJunior', !!val)}
-        />
+          )}
+        </div>
       </div>
-    );
-  }
 
-  // Hide coachName unless player is in a coaching role
-  if (key === 'coachName' && (form.playerType !== 'Junior Club Member')) return null;
-
-  // Hide clubRoles if player is a Junior
-  if (key === 'clubRoles' && form.isJunior) return null;
-
-  // Generic input or dropdown
-  return (
-    <div key={key} className="flex flex-col">
-      <label className="text-sm font-medium capitalize">{key.replace(/([A-Z])/g, ' $1')}</label>
-
-      {dropdownFields[key as keyof typeof dropdownFields] ? (
-        <Select value={val as string} onValueChange={(value) => handleSelectChange(key, value)}>
-          <SelectTrigger>{val}</SelectTrigger>
-          <SelectContent>
-            {dropdownFields[key as keyof typeof dropdownFields].map((option) => (
-              <SelectItem key={option} value={option}>{option}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : key === 'dob' || key === 'joiningDate' ? (
-        <Input type="date" name={key} value={val as string} onChange={handleInputChange} />
-      ) : (
-        <Input name={key} value={val as string} onChange={handleInputChange} />
-      )}
-    </div>
-      );
-      })}
-    </div>
-
-    <div className="flex justify-end gap-2 mt-4">
-      <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
-      <Button onClick={handleSave}>Save</Button>
-    </div>
-  </DialogContent>
-</Dialog>
-
-
-      <Tabs defaultValue="skills" className="w-full">
-
-      <TabsList className="flex gap-4 bg-blue-50 p-2 rounded-xl">
-  <TabsTrigger
-    value="skills"
-    className="text-lg text-blue-800 font-semibold hover:text-white hover:bg-blue-600 px-4 py-2 rounded transition-all"
-  >
-    Skill Matrix
-  </TabsTrigger>
-  <TabsTrigger
-    value="matches"
-    className="text-lg text-purple-800 font-semibold hover:text-white hover:bg-purple-600 px-4 py-2 rounded transition-all"
-  >
-    Match Summary
-  </TabsTrigger>
-</TabsList>
-
-
-
-        <TabsContent value="skills">
-        {player.skillTracking && (
-            <>
-                {/* Scrollable Skill Matrix Section */}
+      <div className="sticky top-[152px] z-10 bg-white py-2 px-4 border-b border-gray-200 shadow-sm">
+<h3 className="text-2xl font-semibold text-blue-700 px-2">Skill Matrix</h3>
+</div>
+  
+      {/* Scrollable Skill Matrix Section */}
       <div className="max-h-[65vh] overflow-y-auto pr-2 custom-scrollbar">
+        {(player.playerType === 'Coaching and Club Member' || player.playerType === 'Coaching only') && (
           <section>
+          
             {Object.entries(skillGroups).map(([group, skillsInGroup]) => (
               <Card key={group} className="mb-4 shadow-sm">
                 <div
@@ -762,6 +586,72 @@ const handlePDFExport = async () => {
               </Card>
             ))}
           </section>
+        )}
+      </div>
+  
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Edit Personal Details</DialogTitle>
+    </DialogHeader>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> 
+    {Object.entries(form).map(([key, val]) => {
+  if (excludedKeys.includes(key)) return null;
+
+  // Handle isJunior as a checkbox (must go before the generic return)
+  if (key === 'isJunior') {
+    return (
+      <div key={key} className="flex items-center gap-2">
+        <label className="text-sm font-medium">Is Junior</label>
+        <Checkbox
+          checked={form.isJunior}
+          onCheckedChange={(val) => handleCheckboxChange('isJunior', !!val)}
+        />
+      </div>
+    );
+  }
+
+  // Hide coachName unless player is in a coaching role
+  if (key === 'coachName' && (form.playerType !== 'Coaching and Club Member' && form.playerType !== 'Coaching only')) return null;
+
+  // Hide clubRoles if player is a Junior
+  if (key === 'clubRoles' && form.isJunior) return null;
+
+  // Generic input or dropdown
+  return (
+    <div key={key} className="flex flex-col">
+      <label className="text-sm font-medium capitalize">{key.replace(/([A-Z])/g, ' $1')}</label>
+
+      {dropdownFields[key as keyof typeof dropdownFields] ? (
+        <Select value={val as string} onValueChange={(value) => handleSelectChange(key, value)}>
+          <SelectTrigger>{val}</SelectTrigger>
+          <SelectContent>
+            {dropdownFields[key as keyof typeof dropdownFields].map((option) => (
+              <SelectItem key={option} value={option}>{option}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : key === 'dob' || key === 'joiningDate' ? (
+        <Input type="date" name={key} value={val as string} onChange={handleInputChange} />
+      ) : (
+        <Input name={key} value={val as string} onChange={handleInputChange} />
+      )}
+    </div>
+      );
+      })}
+    </div>
+    <div className="flex justify-end gap-2 mt-4">
+      <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
+      <Button onClick={handleSave}>Save</Button>
+    </div>
+  </DialogContent>
+</Dialog>
+
+
+
+
+
+      {/* Dialogs and Modals remain outside scrollable matrix */}
       {showSkillReport && (
         <SkillReportCardWrapper player={player} onClose={() => setShowSkillReport(false)} />
       )}
@@ -780,69 +670,11 @@ const handlePDFExport = async () => {
           <Button className="mt-3" onClick={handleSaveComment}>💾 Save Comments</Button>
         </CardContent>
       </Card>
-      </div>
-       </>
-        )}
-          <p className="text-gray-500 mt-4">Skill Tracking is not enabled for this player.</p> 
-         
-        
-
-
-        </TabsContent>
-
-       {/* 🔄 Replaced match card grid with tabular layout */}
-       <TabsContent value="matches">
-          <Card className="mt-4">
-            <CardHeader><CardTitle>Match Summary</CardTitle></CardHeader>
-            <CardContent>
-              {matches.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="bg-blue-100">
-                        <th className="px-4 py-2 text-left">Date</th>
-                        <th className="px-4 py-2 text-left">Category</th>
-                        <th className="px-4 py-2 text-left">Result</th>
-                        <th className="px-4 py-2 text-left">Partner</th>
-                        <th className="px-4 py-2 text-left">Opponent 1</th>
-                        <th className="px-4 py-2 text-left">Opponent 2</th>
-                        <th className="px-4 py-2 text-left">Points</th>
-                       
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {matches.map((match, index) => (
-                        <tr key={index} className="border-b">
-                          <td className="px-4 py-2">{new Date(match.date).toLocaleDateString()}</td>
-                          <td className="px-4 py-2">{match.category}</td>
-                          <td className="px-4 py-2">{match.result}</td>
-                          <td className="px-4 py-2">{match.partner}</td>
-                          <td className="px-4 py-2">{match.opponents?.[0] || '-'}</td>
-                          <td className="px-4 py-2">{match.opponents?.[1] || '-'}</td>
-                          <td className="px-4 py-2">
-                            <span className="inline-block px-2 py-1 border rounded text-center">
-                              {match.points ?? '-'} / {match.opponentPoints ?? '-'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-gray-500">No match history available.</p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-
-      </Tabs>
-
-    
-
     </div>
-    
   )};
-      
-    
+  
+  
+  
+  
+  
+  

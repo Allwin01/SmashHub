@@ -1,6 +1,10 @@
 import { Request, Response } from 'express';
-import MatchHistory from '../control/models/MatchHistory'; // path to your schema
+import MatchHistory from '../control/models/MatchHistory'; 
 import Player from '../control/models/Player';
+import mongoose from 'mongoose';
+
+import MatchSummary from '../control/models/MatchSummary';
+
 
 interface PlayerInfo {
   id: string;
@@ -130,3 +134,32 @@ export const recordMatchHistory = async (req: Request, res: Response) => {
       res.status(500).json({ error: 'Internal server error' });
     }
   };
+
+export const getMatchHistoryByPlayerId = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  console.log(`🎯 Incoming request for match history of player ID: ${id}`); // ✅ Debug log
+  console.log('📥 getMatchHistoryByPlayerId controller called');
+  console.log(`🔎 Requesting match history for player ID: ${id}`);
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ message: 'Invalid player ID' });
+  }
+
+  try {
+    const matches = await MatchHistory.find({ playerId: id }).sort({ matchDate: -1 }).lean();
+    const formattedMatches = matches.map(m => ({
+      date: m.matchDate,
+      category: m.matchType,
+      result: m.result,
+      partner: m.partner,
+      opponents: m.opponents?.map(o => o.name || o), // fallback if it's a string
+    }));
+
+    console.log(`✅ Found ${formattedMatches.length} matches for player ${id}`); // Optional log
+    res.json(formattedMatches);
+  } catch (err) {
+    console.error('❌ Error fetching match history:', err);
+    res.status(500).json({ message: 'Server error while fetching match history' });
+  }
+};

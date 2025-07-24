@@ -21,7 +21,7 @@ export interface IPlayer extends Document {
   level?: 'Beginner' | 'Intermediate' | 'Advanced';
   clubId: Types.ObjectId;
   clubRoles?: string[];
-  playerType?: 'Coaching only' | 'Club Member' | 'Coaching and Club Member';
+  playerType?: 'Coaching only' | 'Club Member' | 'Coaching and Club Member' | 'Junior Club Member' | 'Adult Club Member';
   skillMatrix: Record<string, Record<string, number>>;
   profilePicUrl: { type: String }, // Optional but useful
   skillGroupAverages?: { date: string; groupAverages: Record<string, number> }[];
@@ -31,6 +31,7 @@ export interface IPlayer extends Document {
     skills: Record<string, Record<string, number>>;
   }[];
   coachComment?: string;
+  skillTracking?: boolean; 
   matchHistory: {
     matchId: string;
     matchDate: string;
@@ -48,6 +49,7 @@ export interface IPlayer extends Document {
     points: number;
     duration: string;
     courtNo: number;
+   
   };
   matchCount: { type: number, default: 0 };
 averagePoints: { type: number, default: 0 }
@@ -70,6 +72,10 @@ const PlayerSchema: Schema = new Schema<IPlayer>({
   emergencyContactphonenumber: { type: String, required: true },
   joinDate: { type: Date, required: true },
   coachName: { type: String, default: '' },
+  skillTracking: {
+    type: Boolean,
+    default: false,
+  },  
   paymentStatus: {
     type: String,
     enum: ['Paid', 'Due', 'Partial'],
@@ -89,8 +95,10 @@ const PlayerSchema: Schema = new Schema<IPlayer>({
   profilePicUrl: { type: String }, // Optional but useful
   playerType: {
     type: String,
-    enum: ['Coaching only', 'Club Member', 'Coaching and Club Member']
+    enum: ['Junior Club Member', 'Adult Club Member', 'Coaching only', 'Club Member', 'Coaching and Club Member'],
+    required: true
   },
+  
   clubId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Club',

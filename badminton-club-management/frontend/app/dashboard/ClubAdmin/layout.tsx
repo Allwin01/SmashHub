@@ -85,7 +85,7 @@ export default function ClubAdminLayout({ children }: { children: ReactNode }) {
     { label: 'Player Card', icon: Users, route: '/dashboard/clubadmin/player-card' },
     { label: 'Smart Pegboard', icon: BarChart2, route: '/dashboard/clubadmin/pegboard' },
     { label: 'Tournament', icon: CalendarCheck2, route: '/dashboard/clubadmin/tournament' },
-    { label: 'Player Attendance', icon: CalendarClock, route: '/dashboard/clubadmin/player-attendance' },
+    { label: 'Player Register', icon: CalendarClock, route: '/dashboard/clubadmin/player-attendance' },
     { label: 'Club Ledger', icon: DollarSign, route: '/dashboard/clubadmin/finance' },
     { label: 'Access Control', icon: ShieldCheck, route: '/dashboard/clubadmin/UserPermission' },
     { label: 'Captains Squard', icon: ShieldCheck, route: '/dashboard/clubadmin/captainsquard' },

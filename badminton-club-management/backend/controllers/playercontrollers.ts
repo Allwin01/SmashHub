@@ -9,7 +9,7 @@ import Club from '../control/models/Club';
 
 
 const validSex = ['Male', 'Female'];
-const validPlayerTypes = ['Coaching only', 'Club Member', 'Coaching and Club Member'];
+const validPlayerTypes = ['Coaching only', 'Club Member', 'Coaching and Club Member','Junior Club Member' , 'Adult Club Member'];
 const validClubRoles = [
   'Club President', 'Club Secretary', 'Club Treasurer', 'Men\'s Team Captain',
   'Women\'s Team Captain', 'Coach-Level 1', 'Coach-Level 2', 'Head Coach',
@@ -44,7 +44,7 @@ export const addPlayer = async (req: AuthRequest, res: Response) => {
       firstName, surName, dob, sex, isJunior, parentName, parentPhone, email,
       emergencyContactname, emergencyContactphonenumber, joiningDate,
       paymentStatus, coachName, membershipStatus, level, clubRoles,
-      playerType, profileImage
+      playerType, profileImage, skillTracking
     } = req.body;
 
     // ✅ Check for existing player
@@ -60,8 +60,19 @@ export const addPlayer = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const dobDate = new Date(dob);
-    const age = new Date().getFullYear() - dobDate.getFullYear();
+
+    const dobDate = new Date(dob); // ✅ convert string to Date first
+    if (isNaN(dobDate.getTime())) {
+      return res.status(400).json({ message: 'Invalid DOB provided' });
+    }
+    
+    const today = new Date();
+    const age = today.getFullYear() - dobDate.getFullYear();
+    const m = today.getMonth() - dobDate.getMonth();
+    const d = today.getDate() - dobDate.getDate();
+    const isUnder18 = age < 18 || (age === 18 && (m < 0 || (m === 0 && d < 0)));
+    
+
 
     const newPlayer = new Player({
       firstName,
@@ -82,8 +93,9 @@ export const addPlayer = async (req: AuthRequest, res: Response) => {
       level,
       clubId, // ✅ Directly using clubId from user
       clubRoles,
-      playerType,
+      playerType: isUnder18 ? 'Junior Club Member' : 'Adult Club Member',
       profileImage,
+      skillTracking,
     });
 
     await newPlayer.save();
@@ -589,9 +601,9 @@ export const getPlayersByClub = async (req: AuthRequest, res: Response) => {
     console.log('✅ Club found:', club._id);
 
     const players = await Player.find({ clubId: club._id })
-    .select('firstName surName profilePicUrl playerType coachName clubRoles')
-
-      .sort({ firstName: 1, surName: 1 });
+      .select('_id firstName surname dob profilePicUrl playerType coachName clubRoles')
+      .sort({ firstName: 1, surname: 1 })
+      .lean();
 
     console.log('✅ Players fetched:', players.length);
     return res.status(200).json(players);
@@ -600,6 +612,7 @@ export const getPlayersByClub = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ error: 'Server error' });
   }
 };
+
 
 
 

@@ -9,22 +9,27 @@ interface SmartAssignModalProps {
   onClose: () => void;
   onConfirm: (players: Player[]) => void;
   suggestedPlayers?: Player[];
-  setSuggestedPlayers?: (players: Player[]) => void;
+  setSuggestedPlayers?: (players: Player[]) => void;  
   onRedoAuto: () => void;
   courts: any[];
   players: Player[];
+  
 }
 
 export default function SmartAssignModal({ show, onClose, onConfirm, suggestedPlayers = [], setSuggestedPlayers, onRedoAuto, courts, players }: SmartAssignModalProps) {
   const [category, setCategory] = useState<string | null>(null);
   const [mode, setMode] = useState<'Auto' | 'Smart' | null>(null);
   const [readyToConfirm, setReadyToConfirm] = useState(false);
+  const [warning, setWarning] = useState<string | null>(null);
+  const [acknowledgedWarning, setAcknowledgedWarning] = useState(false);
+  const [nextMode, setNextMode] = useState<'Auto' | 'Smart' | null>(null);
 
   useEffect(() => {
-    if (show && suggestedPlayers?.length === 4 && category && mode === 'Auto') {
-      setReadyToConfirm(true);
+    if (show && category && nextMode === 'Auto' && acknowledgedWarning && mode !== 'Auto') {
+      setMode('Auto');
+      onRedoAuto();
     }
-  }, [show, suggestedPlayers, category, mode]);
+  }, [show, category, acknowledgedWarning, nextMode, mode]);
 
   useEffect(() => {
     if (!show) {
@@ -65,6 +70,31 @@ export default function SmartAssignModal({ show, onClose, onConfirm, suggestedPl
 
   if (!show) return null;
 
+  console.log('🛠 SmartAssignModal warning prop:', warning);
+  const handleCategoryClick = (cat: string) => {
+    const fixed = players[0];
+    const mismatch =
+      (cat === 'WD' || cat === 'WS') && fixed.gender !== 'Female' ||
+      (cat === 'MD' || cat === 'MS') && fixed.gender !== 'Male';
+
+    const msg = mismatch
+      ? `⚠️ "${fixed.firstName ?? fixed.name}" is not eligible for ${cat}. Suggestions may be unavailable.`
+      : null;
+    
+    setWarning(msg);
+    setAcknowledgedWarning(false);
+    setCategory(cat);
+
+    if (!msg) {
+      setMode('Auto');
+      onRedoAuto();
+    } else {
+      setNextMode('Auto');
+    }
+  };
+
+  const shouldShowCategoryStep = !category || (warning && !acknowledgedWarning);
+
   return (
     <div
       id="smart-modal-backdrop"
@@ -75,23 +105,48 @@ export default function SmartAssignModal({ show, onClose, onConfirm, suggestedPl
         className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl shadow-2xl max-w-md w-full"
         onClick={(e) => e.stopPropagation()}
       >
-        {!category ? (
+        {shouldShowCategoryStep ? (
           <>
             <h3 className="text-xl font-semibold mb-4 text-center">Choose Match Category</h3>
             <div className="flex justify-around mb-4">
               {["MS", "WS", "MD", "WD", "XD"].map((cat) => (
                 <button
                   key={cat}
-                  onClick={() => setCategory(cat)}
+                  onClick={() => handleCategoryClick(cat)}
                   className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-white font-bold text-lg shadow-lg"
                 >
                   {cat}
                 </button>
               ))}
             </div>
-            <div className="text-center">
-              <button onClick={onClose} className="text-sm text-gray-600 hover:underline">Cancel</button>
-            </div>
+            {warning && (
+              <>
+                <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-3 rounded mb-4 text-sm text-center">
+                  {warning}
+                </div>
+                <div className="flex justify-center gap-4 mt-2">
+                  <button
+                    onClick={() => {
+                      setAcknowledgedWarning(true);
+                    }}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-full shadow hover:bg-blue-600"
+                  >
+                    Continue Anyway
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="text-sm text-gray-600 hover:underline"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+            {!warning && (
+              <div className="text-center mt-4">
+                <button onClick={onClose} className="text-sm text-gray-600 hover:underline">Cancel</button>
+              </div>
+            )}
           </>
         ) : !mode ? (
           <>
@@ -103,7 +158,7 @@ export default function SmartAssignModal({ show, onClose, onConfirm, suggestedPl
                   onClick={() => {
                     setMode(m as 'Auto' | 'Smart');
                     if (m === 'Auto') {
-                      triggerAutoAssign();
+                      onRedoAuto();
                     }
                   }}
                   className="px-4 py-2 rounded-full bg-purple-500 text-white font-medium shadow-md"
@@ -128,6 +183,158 @@ export default function SmartAssignModal({ show, onClose, onConfirm, suggestedPl
 
               <div className="flex-1 text-sm">
                 <p className="font-semibold mb-1">Selected Players:</p>
+                <ul className="text-sm pl-4 list-disc">
+                  {Array.isArray(suggestedPlayers) && suggestedPlayers.map((p, i) => (
+                    <li key={p.id} className={i === 0 ? 'font-bold text-indigo-700' : ''}>
+                      {p.firstName ?? p.name} {p.surName ?? ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-6">
+              <button
+                onClick={() => {
+                  setSuggestedPlayers?.([]);
+                  onRedoAuto();
+                }}
+                className="px-6 py-2 bg-blue-500 text-white rounded-full shadow hover:bg-blue-600"
+              >
+                🔁 Re-do Auto
+              </button>
+              <button
+                className="px-6 py-2 bg-green-500 text-white rounded-full shadow hover:bg-green-600"
+                onClick={() => onConfirm(suggestedPlayers || [])}
+              >
+                🌻 Start Match
+              </button>
+            </div>
+
+            <button
+              className="text-sm text-gray-600 hover:underline mt-4"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+  {/*}
+  return (
+    <div
+      id="smart-modal-backdrop"
+      className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center"
+      onClick={handleBackdropClick}
+    >
+      <div
+        className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl shadow-2xl max-w-md w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {!category ? (
+          <>
+            <h3 className="text-xl font-semibold mb-4 text-center">Choose Match Category</h3>
+            <div className="flex justify-around mb-4">
+            {["MS", "WS", "MD", "WD", "XD"].map((cat) => (
+  <button
+    key={cat}
+    onClick={() => {
+      const fixed = players[0];
+    
+      if (!fixed) {
+        setWarning(null);
+        setCategory(cat);
+        setMode(null); // reset
+        return;
+      }
+    
+      const mismatch =
+        (cat === 'WD' || cat === 'WS') && fixed.gender !== 'Female' ||
+        (cat === 'MD' || cat === 'MS') && fixed.gender !== 'Male';
+    
+      const msg = mismatch
+        ? `⚠️ "${fixed.name}" is not eligible for ${cat}. Suggestions may be unavailable.`
+        : null;
+    
+      setWarning(msg);
+      setCategory(cat);
+      setMode(null); // always reset
+    
+      // ✅ Only auto-progress to mode step if NO warning
+      if (!msg) {
+        setTimeout(() => {
+          setMode('Auto'); // or open mode selector as usual
+        }, 100); // slight delay to ensure UI renders
+      }
+    }}
+    
+    
+    
+
+    
+    className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-white font-bold text-lg shadow-lg"
+  >
+    {cat}
+  </button>
+))}
+</div>
+          {/* ✅ Inline warning *
+          {warning && (
+      <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-2 rounded mb-2 text-xs">
+        {warning}
+      </div>
+    )}
+            
+
+
+            <div className="text-center">
+              <button onClick={onClose} className="text-sm text-gray-600 hover:underline">Cancel</button>
+            </div>
+          </>
+        ) : !mode ? (
+          <>
+            <h3 className="text-xl font-semibold mb-4 text-center">Choose Assignment Mode</h3>
+            <div className="flex justify-around mb-4">
+              {["Auto", "Smart"].map((m) => (
+                <button
+                  key={m}
+                  onClick={() => {
+                    setMode(m as 'Auto' | 'Smart');
+                    if (m === 'Auto') {
+                      triggerAutoAssign();
+                    }
+                  }}
+                  className="px-4 py-2 rounded-full bg-purple-500 text-white font-medium shadow-md"
+                >
+                  {m}
+                </button>
+
+              ))}
+              
+            </div>
+            
+            <div className="text-center">
+              <button onClick={onClose} className="text-sm text-gray-600 hover:underline">Cancel</button>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center mt-4 w-full">
+            <h3 className="text-xl font-semibold text-center mb-3">Confirm Assignment</h3>
+
+            <div className="flex flex-col md:flex-row gap-6 w-full">
+              <div className="flex-1 text-sm text-left">
+                <p><strong>Category:</strong> {category}</p>
+                <p><strong>Mode:</strong> {mode}</p>
+              </div>
+
+              <div className="flex-1 text-sm">
+                <p className="font-semibold mb-1">Selected Players:</p>
+
+        
                 <ul className="text-sm pl-4 list-disc">
                   {Array.isArray(suggestedPlayers) && suggestedPlayers.map((p, i) => (
                     <li key={p.id} className={i === 0 ? 'font-bold text-indigo-700' : ''}>
@@ -169,6 +376,7 @@ export default function SmartAssignModal({ show, onClose, onConfirm, suggestedPl
     </div>
   );
 }
+*/}
 
 
 
