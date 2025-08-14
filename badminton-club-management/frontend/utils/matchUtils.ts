@@ -2,6 +2,13 @@
 import { Player } from '@/types';
 import { toast } from 'react-toastify';
 
+
+const getId = (p: any): string => (p?.id ?? p?._id ?? '')?.toString();
+const getGender = (p: any): string => (p?.gender ?? p?.sex ?? '');
+const isGuest = (p: any): boolean =>
+  Boolean(p?.isGuest || p?.playerType === 'Guest' || getId(p).startsWith('guest'));
+
+
 export async function saveMatchHistory(
   assignedPlayers: Player[],
   courtNo: number,
@@ -17,13 +24,26 @@ export async function saveMatchHistory(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify({ assignedPlayers, courtNo, matchType, score, duration })
+      body: JSON.stringify({
+        courtNo,
+        matchType,
+        score,
+        duration,
+        assignedPlayers: assignedPlayers.map(p => ({
+          id: p.id,
+          name: `${p.firstName ?? ''} ${p.surName ?? ''}`.trim(),
+          gender: p.gender ?? p.sex,
+          isGuest: p.isGuest || p.playerType === 'Guest',
+        }))
+      })
     });
+    
+  
   } catch (err) {
     console.error('❌ Failed to save match history:', err);
     toast.error('❌ Failed to save match history');
   }
-}
+}  
 
 function getWinningTeam(score: string, teamA: Player[], teamB: Player[]): Player[] | null {
   const [a, b] = score.split('/').map(Number);
@@ -37,6 +57,8 @@ function getWinningTeam(score: string, teamA: Player[], teamB: Player[]): Player
 
   return null;
 }
+
+{/*}
 
 export async function handleStartStopMatch({
   courtNo,
@@ -63,9 +85,52 @@ export async function handleStartStopMatch({
   onScoreChange?: (val: string) => void; // ✅ Pass this from CourtCard
 }) {
   const assignedPlayers = courts.find(c => c.courtNo === courtNo)?.assigned || [];
-  const scoreValue = scores[courtNo];
+const scoreValue = scores[courtNo];  */}
+
+export async function handleStartStopMatch({
+  courtNo,
+  courts,
+  scores,
+  timer,
+  setPlayers,
+  setCourts,
+  toggleTimer,
+  setRefreshWinnerKey,
+  onWin,
+  onScoreChange,
+  overrideScore,             // ✅ add this
+}: {
+  courtNo: number;
+  courts: { courtNo: number; assigned: (Player | null)[] }[];
+  scores: Record<number, string>;
+  timer: Record<number, number>;
+  setPlayers: React.Dispatch<React.SetStateAction<Player[]>>;
+  setCourts: React.Dispatch<any>;
+  toggleTimer: (courtNo: number) => void;
+  setRefreshWinnerKey: React.Dispatch<React.SetStateAction<number>>;
+  onWin?: (team: Player[]) => void;
+  onScoreChange?: (val: string) => void;
+  overrideScore?: string;    // ✅ add this
+}) {
+
+  console.group(`🏁 handleStartStopMatch(court ${courtNo})`);
+  console.log('Args →', {
+    overrideScore,
+    scoresAtCourt: scores?.[courtNo],
+    timerAtCourt: timer?.[courtNo],
+  });
+
+  const assignedPlayers = courts.find(c => c.courtNo === courtNo)?.assigned || [];
+
+  // ✅ Prefer the modal's score if provided
+  const scoreValue = (overrideScore ?? scores[courtNo] ?? '').trim();
+
+  console.log('Derived scoreValue =', scoreValue);
 
   if (!scoreValue || scoreValue === '00/00') {
+
+    console.warn('⛔ No score detected — showing confirm dialog');
+
     const confirmNoSave = window.confirm('⚠️ Score not entered. Match history will not be saved. Proceed?');
     if (!confirmNoSave) return;
     setPlayers(prev => [...prev, ...assignedPlayers]);
@@ -73,11 +138,17 @@ export async function handleStartStopMatch({
     toggleTimer(courtNo);
     return;
   }
-
   const [scoreA, scoreB] = scoreValue.split('/').map(Number);
   const [teamA, teamB] = assignedPlayers.length === 2
     ? [[assignedPlayers[0]], [assignedPlayers[1]]]
     : [assignedPlayers.slice(0, 2), assignedPlayers.slice(2)];
+
+
+    console.log('✅ Proceeding with scoreValue, assignedPlayers:', {
+      scoreValue,
+      teamA: assignedPlayers.slice(0, 2).map(p => ({ id: p?.id ?? p?._id, name: `${p?.firstName} ${p?.surName ?? ''}` })),
+      teamB: assignedPlayers.slice(2, 4).map(p => ({ id: p?.id ?? p?._id, name: `${p?.firstName} ${p?.surName ?? ''}` })),
+    });
 
   const winningTeam = getWinningTeam(scoreValue, teamA, teamB);
   if (!winningTeam) {
@@ -113,8 +184,28 @@ export async function handleStartStopMatch({
 
   const clubId = localStorage.getItem('clubId');
   const today = new Date().toISOString().split('T')[0];
-  const winnerPayload = winningTeam.filter(p => !p.id.startsWith('guest')).map(p => ({ playerId: p.id, gender: p.gender }));
-  if (winnerPayload.length > 0) {
+  const winnerPayload = (winningTeam ?? [])
+  .filter((p) => {
+    const id = getId(p);
+    return id && !isGuest(p); // skip guests; also skip empty ids
+  })
+  .map((p) => ({
+    playerId: getId(p),
+    gender: getGender(p),
+  }));
+
+  const loserPayload = (losingTeam ?? [])
+  .filter((p) => {
+    const id = getId(p);
+    return id && !isGuest(p);
+  })
+  .map((p) => ({
+    playerId: getId(p),
+    gender: getGender(p),
+  }));
+
+
+  if (winnerPayload.length > 0 && loserPayload.length > 0) {
     await fetch('http://localhost:5050/api/matchSummary', {
       method: 'POST',
       headers: {
@@ -131,9 +222,5 @@ export async function handleStartStopMatch({
   toggleTimer(courtNo);
   // ✅ Now reset score (which will hide the textbox)
   if (onScoreChange) onScoreChange(''); // ✅ Now clear score field to hide input
-{/*}
-  toast.success(`✅ Match saved! 🏆 ${winningTeam.map(p => p.name).join(' & ')} won`, {
-    autoClose: 5000,
-  position: 'top-center'   
-  }); */}
+
 }

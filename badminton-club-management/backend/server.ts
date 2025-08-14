@@ -18,7 +18,7 @@ import matchHistoryRoutes from './control/routes/matchHistory';
 import matchSummaryRoutes from './control/routes/matchSummary';
 import attendanceRoutes from './control/routes/attendance';
 import userthemeRoutes from './control/routes/usertheme';
-
+import skillTemplateRoutes from './control/routes/skillTemplate';
 
 
 
@@ -54,7 +54,7 @@ app.use('/api/matchSummary', matchSummaryRoutes);
 //app.use('/api', matchHistoryRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/user', userthemeRoutes);
-
+app.use('/api/skillTemplate', skillTemplateRoutes );
 
 
 // 🔌 MongoDB Connection

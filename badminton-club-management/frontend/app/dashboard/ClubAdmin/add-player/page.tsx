@@ -26,13 +26,15 @@ export default function AddPlayerPage() {
       toast.error('Missing auth or club info');
       return;
     }
+   
 
     const formData = new FormData();
     formData.append('file', file);
     formData.append('clubId', clubId);
 
     try {
-      const response = await fetch('http://localhost:5050/api/players/upload', {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+      const response = await fetch (`${baseUrl}/api/players/upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -41,12 +43,14 @@ export default function AddPlayerPage() {
       });
 
       if (response.ok) {
+        const ct = response.headers.get('content-type') || '';
+        const data = ct.includes('application/json') ? await response.json() : null;
         toast.success('✅ Bulk upload successful');
-        const data = await response.json();
         console.log(data);
       } else {
-        const error = await response.json();
-        toast.error(error.message || '❌ Upload failed');
+        const ct = response.headers.get('content-type') || '';
+        const err = ct.includes('application/json') ? await response.json() : { message: await response.text() };
+        toast.error(err.message || '❌ Upload failed');
       }
     } catch (err) {
       console.error('❌ Upload error:', err);
@@ -55,6 +59,7 @@ export default function AddPlayerPage() {
   };
   const handleSubmit = async () => {
     if (isSubmitting) return;
+    if (!validateForm()) return;
     setIsSubmitting(true);
 
     try {
@@ -65,8 +70,8 @@ export default function AddPlayerPage() {
         setIsSubmitting(false);
         return;
       }
-
-      const response = await fetch('http://localhost:5050/api/players', {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+      const response = await fetch (`${baseUrl}/api/players`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -111,6 +116,37 @@ export default function AddPlayerPage() {
   
   });
 
+  const validateEmail = (email: string) => {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
+  };
+
+  const validateForm = () => {
+    const newErrors: any = {};
+
+    if (!formData.firstName) newErrors.firstName = 'First name is required';
+    if (!formData.surName) newErrors.surName = 'Surname is required';
+    if (!formData.dob) newErrors.dob = 'Date of birth is required';
+    if (!formData.sex) newErrors.sex = 'Please select a gender';
+    if (!formData.email) {
+      newErrors.email = 'Email address is required';
+    } else if (!validateEmail(formData.email)) {
+      newErrors.email = 'Enter a valid email address';
+    }
+    if (!formData.emergencyContactname) newErrors.emergencyContactname = 'Emergency contact name is required';
+    if (!formData.emergencyContactphonenumber) newErrors.emergencyContactphonenumber = 'Emergency contact phone number is required';
+    if (!formData.joiningDate) newErrors.joiningDate = 'Joining date is required';
+    if (!formData.paymentStatus) newErrors.paymentStatus = 'Please select payment status';
+
+    if (formData.isJunior) {
+      if (!formData.parentName) newErrors.parentName = 'Parent/Guardian name is required for junior players';
+      if (!formData.parentPhone) newErrors.parentPhone = 'Parent/Guardian phone is required for junior players';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const [errors, setErrors] = useState<any>({});
   const [isDuplicate, setIsDuplicate] = useState(false);
   const [stats, setStats] = useState({
@@ -123,23 +159,52 @@ export default function AddPlayerPage() {
 
   useEffect(() => {
     const fetchStats = async () => {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5050/api/players', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-
-      const totalPlayers = data.length;
-      const juniors = data.filter(p => p.isJunior).length;
-      const adults = totalPlayers - juniors;
-      const males = data.filter(p => p.sex === 'Male').length;
-      const females = data.filter(p => p.sex === 'Female').length;
-
-      setStats({ totalMembers: totalPlayers, juniors, adults, males, females });
+      try {
+        const token = localStorage.getItem('token');
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+  
+        const res = await fetch(`${baseUrl}/api/players`, {
+          headers: { Authorization: `Bearer ${token ?? ''}` }
+        });
+  
+        // Treat 204 No Content as empty array
+        if (res.status === 204) {
+          setStats({ totalMembers: 0, juniors: 0, adults: 0, males: 0, females: 0 });
+          return;
+        }
+  
+        // If server didn't send JSON, treat as empty
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+          setStats({ totalMembers: 0, juniors: 0, adults: 0, males: 0, females: 0 });
+          return;
+        }
+  
+        // Parse JSON safely
+        const json = await res.json().catch(() => null);
+  
+        // Accept either an array or { players: [...] }
+        const list: Array<{ isJunior?: boolean; sex?: string }> =
+          Array.isArray(json) ? json :
+          (json && Array.isArray(json.players)) ? json.players :
+          [];
+  
+        const totalPlayers = list.length;
+        const juniors = list.filter(p => !!p.isJunior).length;
+        const adults  = totalPlayers - juniors;
+        const males   = list.filter(p => (p.sex || '').toLowerCase() === 'male').length;
+        const females = list.filter(p => (p.sex || '').toLowerCase() === 'female').length;
+  
+        setStats({ totalMembers: totalPlayers, juniors, adults, males, females });
+      } catch (e) {
+        console.error('fetchStats error', e);
+        setStats({ totalMembers: 0, juniors: 0, adults: 0, males: 0, females: 0 });
+      }
     };
-
+  
     fetchStats();
   }, []);
+  
 
   useEffect(() => {
     if (!formData.dob) return;
@@ -163,6 +228,20 @@ export default function AddPlayerPage() {
   
     setFormData((prev) => {
       const updated = { ...prev, [name]: newValue };
+
+      // Revalidate email field live
+      if (name === 'email') {
+        if (!updated.email) {
+          setErrors((err: any) => ({ ...err, email: 'Email address is required' }));
+        } else if (!validateEmail(updated.email)) {
+          setErrors((err: any) => ({ ...err, email: 'Enter a valid email address' }));
+        } else {
+          setErrors((err: any) => {
+            const { email, ...rest } = err;
+            return rest;
+          });
+        }
+      }
       console.log('formData.skillTracking →', updated.skillTracking); // 👈 Debug goes here
       return updated;
     });
@@ -205,7 +284,7 @@ export default function AddPlayerPage() {
           />
         </div>
       </div>
-      <ToastContainer position="top-right" autoClose={2000} />
+      <ToastContainer position="top-right" autoClose={1000} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="rounded-xl shadow-md p-4 flex items-center gap-4 bg-blue-100">
@@ -266,7 +345,22 @@ export default function AddPlayerPage() {
             {renderError('dob')}
           </div>
           <div>
-            <Label>Sex</Label>
+          <div className="flex items-center space-x-1">
+    <label htmlFor="sex" className="text-sm font-medium">Sex</label>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Info className="w-4 h-4 text-gray-500 cursor-pointer" />
+        </TooltipTrigger>
+        <TooltipContent className="bg-white border border-gray-300 rounded shadow text-sm max-w-sm text-gray-800">
+  Used to help assign players to appropriate match formats (e.g., Men's, Women's, Mixed Doubles) based on competition categories. This does not restrict participation or identity.
+</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  </div>
+
+   
+
             <Select value={formData.sex} onValueChange={(val) => handleChange({ target: { name: 'sex', value: val } })}>
               <SelectTrigger>{formData.sex || 'Select'}</SelectTrigger>
               <SelectContent>

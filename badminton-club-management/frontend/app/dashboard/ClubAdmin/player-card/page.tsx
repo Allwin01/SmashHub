@@ -1,3 +1,7 @@
+
+
+
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -30,7 +34,8 @@ export default function PlayerCardDashboard() {
     const fetchPlayers = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:5050/api/players', {
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+        const res = await fetch (`${baseUrl}/api/players`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },

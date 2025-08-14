@@ -208,6 +208,10 @@ git add folder/                   # Stage specific folder
 
 git commit -m "updated Smart pegboard,Club Ledger, Access Control, Captains  Squad"
 git push origin main
+git checkout main           # Start from main
+git checkout -b Dev1        # Create and switch to Dev1
+# Make changes
+git push -u origin Dev1     # Push to GitHub
 
 
 db.players.distinct("clubId")

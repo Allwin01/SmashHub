@@ -193,7 +193,24 @@ export const deletePlayerPost = async (req: AuthRequest, res: Response) => {
 
 //   GetPlayer
 
+// controllers/players.ts
+export const getPlayers = async (req: AuthRequest, res: Response) => {
+  try {
+    const clubId = req.user?.clubId;
+    if (!clubId) return res.status(400).json({ message: 'Club ID missing' });
 
+    const players = await Player.find({ clubId }).lean();
+
+    // ✅ Always send an array (even when empty)
+    return res.status(200).json(players); // not { players }
+  } catch (e) {
+    console.error('getPlayers error', e);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
+
+{/*}
 export const getPlayers = async (req: AuthRequest, res: Response) => {
   console.log('🔐 Decoded user (getPlayers):', req.user);
   try {
@@ -216,7 +233,7 @@ export const getPlayers = async (req: AuthRequest, res: Response) => {
     console.error('❌ Error fetching players:', error);
     res.status(500).json({ message: 'Failed to fetch players' });
   }
-};
+};  */}
 
 
 export const getPlayerById = async (req: AuthRequest, res: Response) => {
@@ -671,6 +688,36 @@ export const markAttendance = async (req: AuthRequest, res: Response) => {
 
 
 
+// 🗑️ POST /api/players/unmarkAttendance
+export const unmarkAttendance = async (req: AuthRequest, res: Response) => {
+  try {
+    const { playerId, date } = req.body;
+
+    if (!playerId || !date) {
+      return res.status(400).json({ error: 'Missing playerId or date' });
+    }
+
+    const club = await Club.findOne({ name: req.user?.clubName });
+    if (!club) {
+      return res.status(404).json({ error: `Club '${req.user?.clubName}' not found` });
+    }
+
+    const result = await Attendance.deleteOne({
+      playerId,
+      date,
+      clubId: club._id
+    });
+
+    if (result.deletedCount > 0) {
+      return res.status(200).json({ message: '✅ Attendance removed' });
+    } else {
+      return res.status(404).json({ message: 'Attendance not found for player on given date' });
+    }
+  } catch (error) {
+    console.error('🔥 Error removing attendance:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
 
 
 // GET /api/player/attendances?date=YYYY-MM-DD&clubId=xxxxx

@@ -23,15 +23,18 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const res = await fetch('http://localhost:5050/api/auth/login', {
+
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+      const response = await fetch(`${baseUrl}/api/auth/login`, {
+      //const res = await fetch('http://localhost:5050/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ email, password }),
       });
-      const result = await res.json();
+      const result = await response.json();
 
-      if (res.ok) {
+      if (response.ok) {
         localStorage.setItem('token', result.token);
         localStorage.setItem('clubId', result.user.clubId);
         localStorage.setItem('clubName', result.clubName || result.user?.clubName || '');

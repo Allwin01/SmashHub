@@ -89,6 +89,7 @@ export default function ClubAdminLayout({ children }: { children: ReactNode }) {
     { label: 'Club Ledger', icon: DollarSign, route: '/dashboard/clubadmin/finance' },
     { label: 'Access Control', icon: ShieldCheck, route: '/dashboard/clubadmin/UserPermission' },
     { label: 'Captains Squard', icon: ShieldCheck, route: '/dashboard/clubadmin/captainsquard' },
+    { label: 'Skill Manager', icon: ShieldCheck, route: '/dashboard/clubadmin/SkillTemplateManager' },
   ];
 
   if (!mounted) return null;

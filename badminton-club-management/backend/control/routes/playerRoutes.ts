@@ -8,7 +8,7 @@ import {
   updatePlayer,
   deletePlayerPost,
   updateSkillMatrix,
-  checkDuplicatePlayer,getPlayersByClub,markAttendance,getPlayersWithAttendance,updateCoachComment,getCoachComment
+  checkDuplicatePlayer,getPlayersByClub,markAttendance,getPlayersWithAttendance,updateCoachComment,getCoachComment,unmarkAttendance
 } from '../../controllers/playercontrollers';
 
   // player.routes.ts
@@ -23,6 +23,7 @@ router.get('/', authenticateJWT, getPlayers);  // ✅ Get all players - for play
 
 // CRUD Routes (POST, PUT, DELETE)
 router.post('/attendance', authenticateJWT, markAttendance);
+router.post('/unmarkAttendance', authenticateJWT, unmarkAttendance);
 router.post('/', authenticateJWT, clubAdminOnly, addPlayer);
 router.put('/:id/skills', authenticateJWT, updateSkillMatrix);
 router.put('/:id', authenticateJWT, clubAdminOnly, updatePlayer);

@@ -36,7 +36,9 @@ export default function SignupOverlay() {
   useEffect(() => {
   const fetchClubs = async () => {
   try {
-  const res = await fetch('http://localhost:5050/api/clubs');
+    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+      const res = await fetch(`${baseUrl}/api/clubs');
   const data = await res.json();
   setClubOptions(data.clubs || []);
   } catch (err) {
@@ -67,10 +69,11 @@ export default function SignupOverlay() {
     setMessage('');
 
     try {
-      const res = await fetch('http://localhost:5050/api/auth/signup', {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+      const res = await fetch (`${baseUrl}/api/auth/signup), {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': `application/json`,
         },
         body: JSON.stringify(formData),
       });

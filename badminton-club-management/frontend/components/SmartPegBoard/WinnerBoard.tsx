@@ -96,16 +96,15 @@ const WinnerBoard: React.FC<WinnerBoardProps> = ({ refreshKey }: { refreshKey: n
 
   return (
     <div className="flex justify-center gap-6 mt-6">
-      {renderPlayer('Lead Male', summary?.topMale)}
-      {renderPlayer('🏆 Top Winner', summary?.topPlayer)}
-      {renderPlayer('Lead Female', summary?.topFemale)}
+      {renderPlayer('🏆 Lead Male', summary?.topMale)}
+      {renderPlayer('🏆 Lead Female', summary?.topFemale)}
     </div>
   );
 };
 
 export default WinnerBoard;
 
-
+{/*   {renderPlayer('🏆 Top Winner', summary?.topPlayer)} */}
 
 {/*
 

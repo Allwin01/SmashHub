@@ -3,14 +3,14 @@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import MembershipBilling from '@/components/PlayerSubscription';
-import ExpenseTracking from '@/components/ExpenseTracker';
-import RevenueTracking from '@/components/RevenueTracker';
-import FinancialReporting from '@/components/FinancialReports';
-import PayrollManagement from '@/components/PayrollManager';
-import InventoryControl from '@/components/InventoryManager';
-import EventCosting from '@/components/EventCosting';
-import AuditCompliance from '@/components/AuditCompliance';
-import UserPermissions from '@/components/UserPermissions';
+import ExpenseTracking from '@/components/finance/ExpenseTracker';
+import RevenueTracking from '@/components/finance/RevenueTracker';
+import FinancialReporting from '@/components/finance/FinancialReports';
+import PayrollManagement from '@/components/finance/PayrollManager';
+import InventoryControl from '@/components/finance/InventoryManager';
+import EventCosting from '@/components/finance/EventCosting';
+import AuditCompliance from '@/components/finance/AuditCompliance';
+import UserPermissions from '@/components/finance/UserPermissions';
 
 export default function DashboardTabs() {
   return (
