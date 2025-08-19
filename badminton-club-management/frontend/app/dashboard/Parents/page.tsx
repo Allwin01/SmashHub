@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import SkillProgressVisual from '@/components/SkillProgressVisual';
+//import SkillProgressVisual from '@/components/SkillProgressVisual';
 
 interface PlayerProfile {
   _id: string;

@@ -19,6 +19,8 @@ import matchSummaryRoutes from './control/routes/matchSummary';
 import attendanceRoutes from './control/routes/attendance';
 import userthemeRoutes from './control/routes/usertheme';
 import skillTemplateRoutes from './control/routes/skillTemplate';
+import playersCsvRouter from './control/routes/playersCsv';
+
 
 
 
@@ -55,7 +57,8 @@ app.use('/api/matchSummary', matchSummaryRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/user', userthemeRoutes);
 app.use('/api/skillTemplate', skillTemplateRoutes );
-
+app.use('/api/players', playersCsvRouter);
+app.use('/api/player-csv', playersCsvRouter); 
 
 // 🔌 MongoDB Connection
 //mongoose.connect(MONGO_URI)

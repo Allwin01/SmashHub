@@ -1,14 +1,20 @@
+// types/express/index.d.ts
 
+import type { AuthPayload } from '../AuthRequest'; // <— adjust path if your file lives elsewhere
 
-import { AuthPayload } from '../../types/AuthRequest';
+declare module 'express-serve-static-core' {
+  interface Request {
+    /** set by your auth middleware */
+    user?: AuthPayload;
 
-declare global {
-  namespace Express {
-    interface Request {
-      user?: AuthPayload;
-    }
+    /** set by multer .single('file') */
+    file?: Express.Multer.File;
+
+    /** set by multer .array(...) or .fields(...) */
+    files?: Express.Multer.File[] | { [fieldname: string]: Express.Multer.File[] };
   }
 }
+
 
 /*
 

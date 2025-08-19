@@ -26,6 +26,8 @@ interface SignupRequestBody {
   selectedClub?: string;
 }
 
+const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
 // ✅ Signup Controller
 export const signupUser = async (
   req: Request<{}, {}, SignupRequestBody>,
@@ -38,12 +40,18 @@ export const signupUser = async (
       role: rawRole, clubName, clubAddress, clubCity, selectedClub
     } = req.body;
 
+
+
     const role = rawRole.trim();
     console.log(`📝 Signup attempt: ${email}, role: ${role}`);
 
     const existingUser = await User.findOne({ email: new RegExp(`^${email}$`, 'i') });
     if (existingUser) {
       return res.status(409).json({ message: 'Email already registered' });
+    }
+
+    if (!EMAIL_REGEX.test(String(email || ''))) {
+      return res.status(400).json({ message: 'Invalid email format. Use name@domain.com' });
     }
 
 // ✅ Optional: Create club if it doesn't already exist

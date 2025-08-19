@@ -1,12 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { DndContext, closestCenter, DragEndEvent, useDroppable, DragOverEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable
-} from '@dnd-kit/sortable';
+import { useState, useEffect, useRef,useMemo, useCallback } from 'react';
+import { DndContext, closestCenter, DragEndEvent, useDroppable, DragOverEvent, PointerSensor, useSensor, useSensors,DragOverlay,sensors } from '@dnd-kit/core';
+import { SortableContext,verticalListSortingStrategy, useSortable} from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -90,7 +86,7 @@ const [showGuestDialog, setShowGuestDialog] = useState(false);
     const [hasFetched, setHasFetched] = useState(false);
     const toastShownRef = useRef(false);
     const [showMatchPopup, setShowMatchPopup] = useState(false);
-   
+    const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
     const [refreshWinnerKey, setRefreshWinnerKey] = useState(Date.now());
     const [summary, setSummary] = useState<MatchSummary | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -108,6 +104,8 @@ const [showGuestDialog, setShowGuestDialog] = useState(false);
     const [clubPlayers, setAllClubPlayers] = useState<Player[]>([]);
     const [justAddedPlayerId, setJustAddedPlayerId] = useState<string | null>(null);
     const [showAllClubModal, setShowAllClubModal] = useState(false);
+  
+
    
   // ✅ Load Player Pool from localStorage (if still valid today)
 // Step 1: Load initial players from localStorage
@@ -173,7 +171,13 @@ useEffect(() => {
     };
     
 
+  
 
+    const courtPlayers = useMemo(
+      () => (courts ?? []).flatMap(c => (c.assigned ?? []).filter(Boolean)) as Player[],
+      [courts]
+    );
+    
 
     const handleConfirmTeamAssign = (selectedPlayers: Player[]) => {
       const court = courts.find(c => c.assigned.every(p => !p));
@@ -240,7 +244,7 @@ useEffect(() => {
         return updated;
       });
     
-      setPlayers(prev => prev.filter(p => p.id !== player._id));
+      setPlayers(prev => prev.filter(p => p.id !== player.id));
        // Set justDropped to trigger animation
     setJustDropped({ court: courtNo, slot: slotIndex });
     setTimeout(() => setJustDropped(null), 1000); // Clear after animation
@@ -249,14 +253,14 @@ useEffect(() => {
     
     const handleDropToPool = (player: Player, insertIndex: number = 0) => {
       setPlayers(prev => {
-        const filtered = prev.filter(p => p.id !== player._id);
+        const filtered = prev.filter(p => p.id !== player.id);
         filtered.splice(insertIndex, 0, player);
         return filtered;
       });
     
       setCourts(prev => prev.map(c => ({
         ...c,
-        assigned: c.assigned.map(p => (p?.id === player._id ? null : p))
+        assigned: c.assigned.map(p => (p?.id === player.id ? null : p))
       })));
     };
     
@@ -265,16 +269,26 @@ useEffect(() => {
       setCourts(prev =>
         prev.map(c => ({
           ...c,
-          assigned: c.assigned.map(p => (p?.id === player._id ? null : p)),
+          assigned: c.assigned.map(p => (p?.id === player.id ? null : p)),
         }))
       );
       // Then insert into pool
       setPlayers(prev => {
-        const without = prev.filter(p => p.id !== player._id);
+        const without = prev.filter(p => p.id !== player.id);
         const updated = [...without];
         updated.splice(insertIndex, 0, player);
         return updated;
       });
+    };
+
+    const updateCourtPlayers = (courtNo: number, updater: (players: (Player | null)[]) => (Player | null)[]) => {
+      setCourts(prev => 
+        prev.map(court => 
+          court.courtNo === courtNo 
+            ? { ...court, assigned: updater(court.assigned) } 
+            : court
+        )
+      );
     };
 
     const handleSmartSelect = async () => {
@@ -336,165 +350,81 @@ useEffect(() => {
     }, []);   
     
 
-// 🧩 Updated Drag Logic in PegBoard
-const handleDragOver = (event: DragOverEvent) => {
+
+
+// --- Entire file updated to handle replacedPlayer logic in drag drop ---
+
+const sensors = useSensors(
+  useSensor(PointerSensor, {
+    activationConstraint: { distance: 5 }
+  })
+);
+const handleDragEnd = (event: DragEndEvent) => {
   const { active, over } = event;
-  if (!over) return;
+  const activeData = active.data?.current;
+  if (!activeData || !over) return;
 
-  const fromPool = active?.data?.current?.from === 'pool';
-  const fromCourt = active?.data?.current?.from === 'court';
-  const draggedPlayer = active?.data?.current?.player;
-  if (!draggedPlayer) return;
+  const player: Player = activeData.player;
+  const from = activeData.from;
+  const overId = over.id.toString();
 
-  const overId = over.id as string;
-  if (overId.startsWith('slot-')) {
+  // === 1. Player Pool → Court ===
+  if (from === 'pool' && overId.startsWith('slot-')) {
     const [, courtStr, slotStr] = overId.split('-');
     const courtNo = parseInt(courtStr);
     const slotIndex = parseInt(slotStr);
     if (isNaN(courtNo) || isNaN(slotIndex)) return;
 
-    setCourts(prev =>
-      prev.map(c =>
-        c.courtNo === courtNo
-          ? {
-              ...c,
-              assigned: c.assigned.map((p, i) =>
-                i === slotIndex ? draggedPlayer : p
-              )
-            }
-          : c
+    const courtIndex = courts.findIndex(c => c.courtNo === courtNo);
+    if (courtIndex === -1) return;
+
+    const replacedPlayer = courts[courtIndex].assigned[slotIndex];
+    const newCourts = [...courts];
+
+    newCourts[courtIndex] = {
+      ...newCourts[courtIndex],
+      assigned: newCourts[courtIndex].assigned.map((p, i) =>
+        i === slotIndex ? player : p
       )
-    );
+    };
 
-    if (fromPool) {
-      setPlayers(prev => prev.filter(p => p.id !== draggedPlayer.id));
+    const playerId = player.id || player._id;
+    const newPlayers = players.filter(p => (p.id || p._id) !== playerId);
+
+    if (
+      replacedPlayer &&
+      !newPlayers.some(p => (p.id || p._id) === (replacedPlayer.id || replacedPlayer._id))
+    ) {
+      newPlayers.unshift(replacedPlayer);
     }
 
-    // Reinsert dragged player back to pool if they are moved out of a court slot
-    if (fromCourt) {
-      const fromSlotIndex = active.data.current.index;
-      const fromCourtNo = courts.find(c =>
-        c.assigned[fromSlotIndex]?.id === draggedPlayer.id
-      )?.courtNo;
-
-      // If moved to different court/slot
-      if (fromCourtNo !== courtNo || fromSlotIndex !== slotIndex) {
-        setPlayers(prev => [{ ...draggedPlayer }, ...prev]);
-        setCourts(prev =>
-          prev.map(c =>
-            c.courtNo === fromCourtNo
-              ? {
-                  ...c,
-                  assigned: c.assigned.map((p, i) =>
-                    i === fromSlotIndex ? null : p
-                  )
-                }
-              : c
-          )
-        );
-      }
-    }
-  }
-};
-
-
-
-// --- Entire file updated to handle replacedPlayer logic in drag drop ---
-
-
-// In the drag end logic
-const handleDragEnd = async (event: DragEndEvent) => {
-  const { active, over } = event;
-  if (!over) {
-    console.warn('⛔ Drag ended but no valid drop target.');
+    setCourts(newCourts);
+    setPlayers(newPlayers);
     return;
   }
 
-  const activeData = active.data?.current;
-  const overId = over.id.toString();
-  if (!activeData || !activeData.player) return;
+  // === 2. Court → Player Pool ===
+  if (from === 'court' && overId === 'player-pool') {
+    const playerId = player.id || player._id;
 
-  const player: Player = activeData.player;
-  const from = activeData.from;
+    setCourts(prev =>
+      prev.map(court => ({
+        ...court,
+        assigned: court.assigned.map(p =>
+          (p?.id || p?._id) === playerId ? null : p
+        )
+      }))
+    );
 
-  console.log('🎯 DragEnd Event:');
-  console.log('  From:', from);
-  console.log('  Active ID:', active.id);
-  console.log('  Over ID:', overId);
-  console.log('  Player:', player);
-
-  console.log('🔴 Drag End Player:', active.data?.current?.player);
-console.log('🔴 From:', active.data?.current?.from);
-
-
-  // 👉 From "All Club Players" ➝ Pool → mark attendance
-  if (from === 'all') {
-    const overIdForced = over?.id === 'player-pool' || over?.id?.startsWith('slot-')
-      ? 'player-pool'
-      : over?.id;
-  
-    if (overIdForced !== 'player-pool') {
-      toast.warn('Please drag to Player Pool first before assigning to court');
-      return;
-    }
     setPlayers(prev => {
-      if (prev.find(p => p.id === player._id)) return prev;
-      setJustAddedPlayerId(player._id); // 👈 Track player
+      if (prev.some(p => (p.id || p._id) === playerId)) return prev;
       return [...prev, player];
     });
 
-    try {
-      const token = localStorage.getItem('token');
-      const today = new Date().toISOString().split('T')[0];
-      await fetch('http://localhost:5050/api/attendance', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ playerId: player._id, date: today })
-      });
-      toast.success(`${player.name} marked as present`);
-    } catch (err) {
-      toast.error('Failed to mark attendance');
-      console.error('❌ Attendance mark failed:', err);
-    }
-
     return;
   }
 
-  // 👉 From Pool ➝ "All Club Players" → unmark attendance
-  if (from === 'pool' && overId.startsWith('all-')) {
-    setPlayers(prev => prev.filter(p => p.id !== player._id));
-
-    try {
-      const token = localStorage.getItem('token');
-      const today = new Date().toISOString().split('T')[0];
-      await fetch('http://localhost:5050/api/attendance/unmark', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ playerId: player._id, date: today })
-      });
-      toast.info(`${player.name} removed from attendance`);
-    } catch (err) {
-      toast.error('Failed to unmark attendance');
-      console.error('❌ Attendance unmark failed:', err);
-    }
-
-    return;
-  }
-// Restrict Dragging: From All Club Players → only to Player Pool
-  if (from === 'all' && over.id?.startsWith('slot-')) {
-    // ❌ Prevent direct drop to court
-    toast.warn('Drag to Player Pool first before assigning to court');
-    return;
-  }
-  
-
-  // 🔁 Court ➝ Court Slot (Reorder)
+  // === 3. Court ⇄ Court Swap ===
   if (from === 'court' && overId.startsWith('slot-')) {
     const [, courtStr, toIndexStr] = overId.split('-');
     const courtNo = parseInt(courtStr);
@@ -505,89 +435,19 @@ console.log('🔴 From:', active.data?.current?.from);
     setCourts(prev =>
       prev.map(court => {
         if (court.courtNo !== courtNo) return court;
-        const newAssigned = [...court.assigned];
-        const temp = newAssigned[toIndex];
-        newAssigned[toIndex] = newAssigned[fromIndex];
-        newAssigned[fromIndex] = temp;
-        return { ...court, assigned: newAssigned };
+
+        const updated = [...court.assigned];
+        const temp = updated[toIndex];
+        updated[toIndex] = updated[fromIndex];
+        updated[fromIndex] = temp;
+
+        return { ...court, assigned: updated };
       })
     );
 
     return;
   }
-
-// 🔄 Court ➝ Player Pool (drop into pool container)
-if (from === 'court' && over?.id === 'player-pool') {
-  setPlayers(prev => {
-    if (prev.find(p => p.id === player._id)) return prev;
-    setJustAddedPlayerId(player._id); // 👈 Track player
-    return [...prev, player]; // Add to end to preserve drop order
-  });
-
-  setCourts(prev =>
-    prev.map(court => ({
-      ...court,
-      assigned: court.assigned.map(p => (p?.id === player._id ? null : p))
-    }))
-  );
-
-  toast.success(`${player.name} returned to Player Pool`);
-  return;
-}
-
-
-  // 🔁 Pool ➝ Court Slot
-  if (from === 'pool' && overId.startsWith('slot-')) {
-    const [, courtStr, slotStr] = overId.split('-');
-    const courtNo = parseInt(courtStr);
-    const slotIndex = parseInt(slotStr);
-    if (isNaN(courtNo) || isNaN(slotIndex)) return;
-
-    let replacedPlayer: Player | null = null;
-
-    setCourts(prev =>
-      prev.map(court => {
-        if (court.courtNo !== courtNo) return court;
-        replacedPlayer = court.assigned[slotIndex] ?? null;
-        const newAssigned = [...court.assigned];
-        newAssigned[slotIndex] = player;
-        return { ...court, assigned: newAssigned };
-      })
-    );
-
-    setPlayers(prev => {
-      const updated = prev.filter(p => p.id !== player._id);
-      if (replacedPlayer) updated.unshift(replacedPlayer);
-      return updated;
-    });
-
-    return;
-  }
-
-  // 🔁 Pool ➝ Pool (Reorder)
-  if (from === 'pool' && overId.startsWith('pool-')) {
-    const fromIndex = activeData.playerIndex;
-    const toIndex = players.findIndex(p => `pool-${p._id}` === overId);
-    if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
-      const updated = [...players];
-      const [moved] = updated.splice(fromIndex, 1);
-      updated.splice(toIndex, 0, moved);
-      setPlayers(updated);
-    }
-
-    return;
-  }
-
-  console.warn('🤔 Unhandled drop:', { activeData, overId });
 };
-
-useEffect(() => {
-  if (justAddedPlayerId) {
-    const timeout = setTimeout(() => setJustAddedPlayerId(null), 1000);
-    return () => clearTimeout(timeout);
-  }
-}, [justAddedPlayerId]);
-
 
 
 
@@ -674,29 +534,118 @@ useEffect(() => {
 
 
   //Add Guest Player
-  const guestCounters = useRef({ Male: 1, Female: 1 }); 
-  const addGuestPlayer = () => {
-    if (!guestGender) return;
-    const index = guestCounters.current[guestGender]++;
-    const guestId = `guest_${guestGender.toLowerCase()}_${index}`;
-    const name = guestNameInput.trim();
-    const guestName = name
-      ? `Guest - ${name}`
-      : `Guest ${guestGender} ${index}`;
-    setPlayers(prev => [...prev, { id: guestId, name: guestName, gender: guestGender }]);
-    setShowGuestDialog(false);
-    setGuestNameInput('');
-    setGuestGender(null);
-   
+
+const guestCounters = useRef({ Male: 1, Female: 1 });
+
+// New: submit handler (replaces addGuestPlayer)
+const handleGuestSubmit = (sex: 'Male' | 'Female') => {
+  const raw = guestNameInput.trim();
+  if (!raw) {
+    toast.warn('Please enter the guest first name.');
+    return;
+  }
+
+  const idx = guestCounters.current[sex]++;
+  const id = `guest_${sex.toLowerCase()}_${idx}`;
+  const firstName = raw.replace(/\s+/g, ' '); // normalize spaces
+
+  // Shape matches the rest of your app (CourtCard, matchUtils, etc.)
+  const newGuest: any = {
+    id,                   // guest_* id string
+    _id: undefined,       // keep undefined to avoid ObjectId assumptions
+    isGuest: true,
+    playerType: 'Guest',
+    firstName,            // UI uses this
+    surName: '',
+    gender: sex,          // your UI uses 'gender'
+    sex,                  // some places read 'sex'
+    name: firstName,      // fallback for any old code that uses 'name'
+    profileImage: '',     // optional; keeps avatar code happy
   };
-  
+
+  // Add to the Player Pool (prepend so it’s visible)
+  setPlayers(prev => [...prev, newGuest]);
+
+  // Reset dialog
+  setGuestNameInput('');
+  setGuestGender(null);
+  setShowGuestDialog(false);
+
+  toast.success(`Guest added: ${firstName} (${sex})`);
+};
+
+// local storae for court player
+// Helper – same key scheme CourtCard uses
+const storageKeyForCourt = (clubId: string, date: string, courtNo: number) =>
+  `court:${clubId}:${date}:#${courtNo}`;
+
+// Resume a court timer from a saved elapsed (ms)
+const resumeTimerFromMs = useCallback((courtNo: number, ms: number) => {
+  setTimer(prev => ({ ...prev, [courtNo]: ms }));
+  if (!intervals[courtNo]) {
+    // toggleTimer should start from the current timer[courtNo] baseline
+    toggleTimer(courtNo);
+  }
+}, [intervals, toggleTimer, setTimer]);
+
+// One-time hydration on mount
+const hydratedRef = useRef(false);
+useEffect(() => {
+  if (hydratedRef.current) return;
+  hydratedRef.current = true;
+
+  const clubId = localStorage.getItem('clubId') || '';
+  if (!clubId) return;
+
+  const date = new Date().toISOString().slice(0, 10);
+
+  const restoredCourts: Array<{ courtNo: number; assigned: (any|null)[] }> = [];
+  const restoredScores: Record<number, string> = {};
+  const restoredTimers: Record<number, number> = {};
+  const runningCourts: number[] = [];
+
+  // Scan localStorage for today’s courts
+  const prefix = `court:${clubId}:${date}:#`;
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i)!;
+    if (!k.startsWith(prefix)) continue;
+
+    const courtNo = Number(k.slice(prefix.length));
+    if (!Number.isFinite(courtNo)) continue;
+
+    try {
+      const saved = JSON.parse(localStorage.getItem(k) || '{}');
+      const assigned = (saved.assigned ?? []).map((snap: any) => (snap ? { ...snap } : null));
+      const elapsed = Number(saved.lastElapsedMs || 0);
+      const running = !!saved.isRunning;
+      const score = String(saved.score || '');
+
+      restoredCourts.push({ courtNo, assigned });
+      restoredTimers[courtNo] = elapsed;
+      if (score) restoredScores[courtNo] = score;
+      if (running) runningCourts.push(courtNo);
+    } catch { /* ignore bad payloads */ }
+  }
+
+  if (restoredCourts.length === 0) return;
+
+  // Replace/merge courts (here we replace — tweak if you want merge)
+  setCourts(restoredCourts);
+
+  // Restore scores
+  Object.entries(restoredScores).forEach(([cNo, val]) =>
+    handleScoreChange(Number(cNo), val)
+  );
+
+  // Set elapsed and resume timers if needed
+  setTimer(prev => ({ ...prev, ...restoredTimers }));
+  runningCourts.forEach(cNo => resumeTimerFromMs(cNo, restoredTimers[cNo] || 0));
+}, []); // run once
+
 
 
   return (
-    <DndContext
-    collisionDetection={closestCenter}
-    onDragEnd={handleDragEnd}
-  >
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
     
     <div className={`min-h-screen bg-gradient-to-br from-blue-100 to-indigo-100 p-6 relative transition-all duration-300 ${isFullscreen ? 'fixed inset-0 z-50 bg-white overflow-y-auto' : ''}`}>
       <ToastContainer />
@@ -749,7 +698,7 @@ useEffect(() => {
   onShowAllClub={() => setShowAllClubModal(true)}
   />
 
-{/* Modal for Club Player  */}
+{/* Modal for Club Player 
 {showAllClubModal && (
   <AllClubSelector
     allPlayers={clubPlayers} // ✅ Replace with your real player array
@@ -761,6 +710,21 @@ useEffect(() => {
     open={showAllClubModal}
     setOpen={setShowAllClubModal}
   />
+)}  */}
+
+{/* Modal for Club Player */}
+{showAllClubModal && (
+  <AllClubSelector
+    open={showAllClubModal}
+    setOpen={setShowAllClubModal}
+    onClose={() => setShowAllClubModal(false)}
+    allPlayers={clubPlayers}
+    playerPool={players}
+    setPlayerPool={setPlayers}
+    setPlayers={setPlayers}
+    setJustAddedPlayerId={setJustAddedPlayerId}
+    courtPlayers={courtPlayers}       // 👈 NEW: drives “In Play” state
+  />
 )}
 
 {/* Modal for Guest  */}
@@ -770,45 +734,40 @@ useEffect(() => {
     <DialogHeader>
       <DialogTitle className="text-lg font-bold text-indigo-700">Add Guest Player</DialogTitle>
     </DialogHeader>
+
     <div className="space-y-4">
       <Input
         type="text"
-        placeholder="Enter guest name (optional)"
+        placeholder="Enter guest first name"
         value={guestNameInput}
         onChange={(e) => setGuestNameInput(e.target.value)}
         className="text-sm"
       />
-     <div className="flex justify-between gap-4 mt-4">
-  <Button
-    onClick={() => setGuestGender('Male')}
-    className={`w-full font-semibold text-white transition-all duration-200 ${
-      guestGender === 'Male'
-        ? 'bg-blue-600 ring-2 ring-blue-400 ring-offset-2'
-        : 'bg-blue-400 hover:bg-blue-500'
-    }`}
-  >
-    Male
-  </Button>
+      <p className="text-xs text-gray-500">First name is required. Choose the gender to add the guest.</p>
 
-  <Button
-    onClick={() => setGuestGender('Female')}
-    className={`w-full font-semibold text-white transition-all duration-200 ${
-      guestGender === 'Female'
-        ? 'bg-pink-600 ring-2 ring-pink-400 ring-offset-2'
-        : 'bg-pink-400 hover:bg-pink-500'
-    }`}
-  >
-    Female
-  </Button>
-</div>
+      <div className="flex justify-between gap-4 mt-2">
+        <Button
+          type="button"
+          onClick={() => handleGuestSubmit('Male')}
+          disabled={guestNameInput.trim() === ''}
+          className={`w-full font-semibold text-white transition-all duration-200 ${
+            guestNameInput.trim() === '' ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+          }`}
+        >
+          Male
+        </Button>
 
-      <Button
-        className="w-full bg-gradient-to-r from-indigo-400 to-purple-500 text-white"
-        onClick={addGuestPlayer}
-        disabled={!guestGender}
-      >
-        Add to Player Pool
-      </Button>
+        <Button
+          type="button"
+          onClick={() => handleGuestSubmit('Female')}
+          disabled={guestNameInput.trim() === ''}
+          className={`w-full font-semibold text-white transition-all duration-200 ${
+            guestNameInput.trim() === '' ? 'bg-pink-300 cursor-not-allowed' : 'bg-pink-600 hover:bg-pink-700'
+          }`}
+        >
+          Female
+        </Button>
+      </div>
     </div>
   </DialogContent>
 </Dialog>
@@ -878,97 +837,6 @@ useEffect(() => {
   }}
   onDropFromCourt={(player, index) => {
     setPlayers(prev => {
-      const without = prev.filter(p => p.id !== player._id);
-      const updated = [...without];
-      updated.splice(index, 0, player);
-      return updated;
-    });
-
-    setCourts(prev =>
-      prev.map(c => ({
-        ...c,
-        assigned: c.assigned.map(p => (p?.id === player._id ? null : p)),
-      }))
-    );
-  }}
-/>
-  </div>
-
-  {/* 🟩 2. Court Section (Rightmost) */}
-  <div className="w-full lg:flex-1 overflow-x-auto">
-    <div className="flex flex-wrap justify-center gap-6">
-      {courts.map(({ courtNo, assigned }, index) => (
-        <div key={courtNo} className="relative" id={`court-${courtNo}`}>
-          <CourtCard
-            courtNo={courtNo}
-            assigned={assigned}
-            score={scores[courtNo] || ''}
-            onScoreChange={(value) => handleScoreChange(courtNo, value)}
-            onStartStop={() => {
-              if (!intervals[courtNo]) {
-                toggleTimer(courtNo);
-                toast.info(`🕒 Match started on Court ${courtNo}`, { position: 'bottom-center' });
-              } else {
-                handleStartStopMatch({
-                  courtNo,
-                  courts,
-                  scores,
-                  timer,
-                  setPlayers,
-                  setCourts,
-                  toggleTimer,
-                  setRefreshWinnerKey,
-                  onWin: (team) => {
-                    setWinningTeam(team);
-                    setWinningCourt(courtNo);
-                  },
-                  onScoreChange: (val) => handleScoreChange(courtNo, val)
-                });
-              }
-            }}
-            isRunning={!!intervals[courtNo]}
-            time={formatTime(timer[courtNo] || 0)}
-            onRemoveCourt={() => removeCourt(index)}
-            onDropPlayer={(slotIndex, player) => handleDropToCourt(courtNo, slotIndex, player)}
-          />
-
-          {winningTeam && winningCourt === courtNo && (
-            <ConfettiEffect
-              winnerNames={winningTeam.map(p => p.name).join(' & ')}
-              containerId={`court-${courtNo}`}
-              onComplete={() => {
-                setWinningTeam(null);
-                setWinningCourt(null);
-              }}
-            />
-          )}
-        </div>
-      ))}
-    </div>
-  </div>
-</div>
-
-</div>
-     </DndContext>
-  );
-      
-      }
-
-
-  {/* Layout 
-  <div className="flex flex-col lg:flex-row gap-6 mt-6">
-  <PlayerPool
-  players={players}
-  onReorder={(from, to) => {
-    setPlayers(prev => {
-      const updated = [...prev];
-      const [moved] = updated.splice(from, 1);
-      updated.splice(to, 0, moved);
-      return updated;
-    });
-  }}
-  onDropFromCourt={(player, index) => {
-    setPlayers(prev => {
       const without = prev.filter(p => p.id !== player.id);
       const updated = [...without];
       updated.splice(index, 0, player);
@@ -983,37 +851,31 @@ useEffect(() => {
     );
   }}
 />
-
-<div className="w-full lg:w-[25%]">
-    {/* Right Column: All Club Players (now visually aligned) 
-    <h3 className="text-lg font-semibold mb-2 text-gray-700 text-center">All Club Players</h3>
-    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 gap-3">
-      {allClubPlayers.map(player => (
-        <DraggablePlayerCard
-          key={player.id}
-          player={player}
-          from="all"
-          isPresent={players.some(p => p.id === player.id)}
-        />
-      ))}
-    </div>
   </div>
 
+  {/* 🟩 2. Court Section (Rightmost) */}
+  <div className="w-full lg:flex-1 overflow-x-auto">
 
-      <div className="flex-1 overflow-x-auto">
-        <div className="flex flex-wrap justify-center gap-6">
-        {courts.map(({ courtNo, assigned }, index) => (
-  <div key={courtNo} className="relative" id={`court-${courtNo}`}>
+
+  <div className="flex flex-wrap justify-center gap-6">
+  {courts.map(({ courtNo, assigned }, index) => (
     <CourtCard
+      key={courtNo}
       courtNo={courtNo}
       assigned={assigned}
       score={scores[courtNo] || ''}
+
       onScoreChange={(value) => handleScoreChange(courtNo, value)}
-      onStartStop={() => {
+
+      onStartStop={(overrideScore?: string) => {
+        console.log('⬅️ Parent onStartStop received', { courtNo, overrideScore, rawScore: scores[courtNo] });
+
         if (!intervals[courtNo]) {
+          // START
           toggleTimer(courtNo);
           toast.info(`🕒 Match started on Court ${courtNo}`, { position: 'bottom-center' });
         } else {
+          // STOP (use modal score if provided)
           handleStartStopMatch({
             courtNo,
             courts,
@@ -1025,33 +887,53 @@ useEffect(() => {
             setRefreshWinnerKey,
             onWin: (team) => {
               setWinningTeam(team);
-              setWinningCourt(courtNo); // Track the winning court here
+              setWinningCourt(courtNo);
             },
-            onScoreChange: (val) => handleScoreChange(courtNo, val) // ✅ Pass reset logic
+            onScoreChange: (val) => handleScoreChange(courtNo, val),
+            overrideScore,
           });
         }
       }}
+
       isRunning={!!intervals[courtNo]}
       time={formatTime(timer[courtNo] || 0)}
-      onRemoveCourt={() => removeCourt(index)}
-      onDropPlayer={(slotIndex, player) => handleDropToCourt(courtNo, slotIndex, player)}
-    />
 
-    {winningTeam && winningCourt === courtNo && (
-      <ConfettiEffect
-        winnerNames={winningTeam.map(p => p.name).join(' & ')}
-        containerId={`court-${courtNo}`}
-        onComplete={() => {
-          setWinningTeam(null);
-          setWinningCourt(null);
-        }}
-      />
-    )}
+      onRemoveCourt={() => removeCourt(index)}
+
+      onDropPlayer={(slotIndex, player) => {
+        setCourts(prev => prev.map(court => {
+          if (court.courtNo !== courtNo) return court;
+          const updated = [...court.assigned];
+          updated[slotIndex] = player;
+          return { ...court, assigned: updated };
+        }));
+      }}
+    />
+  ))}
+</div>
+
+
+
+
+
+
   </div>
-))}
-        </div>
-      </div>
-    </div>  */}
+</div>
+
+</div>
+
+<DragOverlay dropAnimation={{ duration: 150 }}>
+    {activePlayerId ? (
+      <SortablePoolPlayer
+        player={players.find(p => `pool-${p._id || p.id}` === activePlayerId)!}
+        dragOverlay
+      />
+    ) : null}
+  </DragOverlay>
+     </DndContext>
+  );
+      
+      }
 
 
 

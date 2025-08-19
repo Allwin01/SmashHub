@@ -1,169 +1,208 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import SignupOverlay from '@/components/SignupOverlay';
 
-
-
-export default function SignupOverlay() {
+export default function LoginPage() {
   const router = useRouter();
-
-  const [formData, setFormData] = useState({
-    firstName: '',
-    surName: '',
-    email: '',
-    password: '',
-    address1: '',
-    address2: '',
-    postcode: '',
-    county: '',
-    country: '',
-    role: '',
-    clubName: '',
-    clubCity: '',
-    clubAddress: '',
-    selectedClub: ''
-  });
-
-  const [clubOptions, setClubOptions] = useState<string[]>([]);
-  const [selectedClub, setSelectedClub] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSignup, setShowSignup] = useState(false);
+  const inactivityTimeout = useRef<NodeJS.Timeout | null>(null);
+  const INACTIVITY_LIMIT = 30000; // 30s
 
-  const roles = ['Club Admin', 'Parents', 'Tournament Organiser', 'Independent Coach'];
-
-
-  useEffect(() => {
-  const fetchClubs = async () => {
-  try {
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-      const res = await fetch(`${baseUrl}/api/clubs');
-  const data = await res.json();
-  setClubOptions(data.clubs || []);
-  } catch (err) {
-  console.error('Error loading clubs:', err);
-  setClubOptions([]);
-  }
-  };
-  
-  if (formData.role === 'Parents') {
-  fetchClubs();
-  } else {
-  setClubOptions([]);
-  }
-  }, [formData.role]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,  
-      ...(name === 'email' ? { username: value } : {})
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsSubmitting(true);
     setMessage('');
+    setIsSubmitting(true);
 
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-      const res = await fetch (`${baseUrl}/api/auth/signup), {
+      const response = await fetch(`${baseUrl}/api/auth/login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': `application/json`,
-        },
-        body: JSON.stringify(formData),
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
       });
 
-      const result = await res.json();
+      const result = await response.json();
 
-      if (res.ok) {
-        setMessage('✅ Registration successful! Redirecting to login...');
-        setTimeout(() => {
-          router.push('/');  // assuming your login is at `/`
-        }, 3000);
+      if (response.ok) {
+        localStorage.setItem('token', result.token);
+        localStorage.setItem('clubId', result.user?.clubId || '');
+        localStorage.setItem('clubName', result.clubName || result.user?.clubName || '');
+
+        switch (result.user?.role) {
+          case 'SuperAdmin':
+            router.push('/dashboard/superadmin');
+            break;
+          case 'Club Admin':
+            router.push('/dashboard/clubadmin');
+            break;
+          case 'Parents':
+            router.push('/dashboard/Parents');
+            break;
+          case 'Independent Coach':
+            router.push('/dashboard/Independentcoach');
+            break;
+          case 'Tournament Organiser':
+            router.push('/dashboard/TournamentOrganiser');
+            break;
+          default:
+            setMessage('Unknown role.');
+        }
       } else {
-        setMessage(`❌ ${result.message || 'Signup failed'}`);
+        setMessage(result.message || 'Login failed');
       }
-    } catch (error) {
-      console.error(error);
-      setMessage('❌ Server error, please try again later.');
+    } catch (err) {
+      console.error(err);
+      setMessage('Server error. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleCancel = () => {
-    router.push('/');
-  };
+  // Clear inputs after inactivity while the login card is visible
+  useEffect(() => {
+    if (!showSignup) {
+      if (inactivityTimeout.current) clearTimeout(inactivityTimeout.current);
+      inactivityTimeout.current = setTimeout(() => {
+        setEmail('');
+        setPassword('');
+        setMessage('');
+      }, INACTIVITY_LIMIT);
+    }
+    return () => {
+      if (inactivityTimeout.current) clearTimeout(inactivityTimeout.current);
+    };
+  }, [showSignup, email, password]);
 
   return (
-    <div className="min-h-screen bg-cover bg-center bg-no-repeat flex items-center justify-center" style={{ backgroundImage: "url('/court-bg.jpg')" }}>
-      <div className="bg-white bg-opacity-90 rounded-xl p-6 shadow-xl w-full max-w-xl relative">
-        <button
-          onClick={handleCancel}
-          className="absolute top-3 right-3 text-gray-500 hover:text-black text-xl font-bold"
-          aria-label="Close"
+    <main
+      className="min-h-screen w-full bg-cover bg-center flex flex-col items-center justify-center px-4 sm:px-8 py-10 text-center"
+      style={{ backgroundImage: "url('/Background2.png')" }}
+    >
+      <motion.header
+        className="mb-6"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+      >
+        <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-extrabold text-white tracking-wide">
+          SmashHub
+        </h1>
+      </motion.header>
+
+      <motion.div
+        className="text-white max-w-3xl mb-8 px-4"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <p className="text-lg sm:text-xl md:text-2xl lg:text-3xl leading-relaxed font-medium">
+          SmashHub is your all-in-one badminton club platform — track player skills, organize
+          tournaments, Smart PegBoards, and keep club finances transparent.
+        </p>
+      </motion.div>
+
+      {/* Login card */}
+      {!showSignup && (
+        <motion.div
+          className="w-full max-w-sm sm:max-w-md md:max-w-lg bg-gradient-to-br from-yellow-300 via-pink-300 to-indigo-400/80 backdrop-blur-md shadow-2xl border border-white/20 p-8 sm:p-10 rounded-2xl"
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.35 }}
         >
-          ×
-        </button>
-        <h2 className="text-2xl font-bold mb-4 text-center">Create Your Account</h2>
-        <form className="space-y-4 text-gray-800" onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-4">
-            <input name="firstName" value={formData.firstName} onChange={handleChange} placeholder="First Name" className="border p-2 rounded text-gray-900" required />
-            <input name="surName" value={formData.surName} onChange={handleChange} placeholder="Surname" className="border p-2 rounded text-gray-900" required />
-          </div>
-          <input name="email" type="email" value={formData.email} onChange={handleChange} placeholder="Email Address" className="w-full border p-2 rounded text-gray-900" required />
-    
-          <input name="password" type="password" value={formData.password} onChange={handleChange} placeholder="Password" className="w-full border p-2 rounded text-gray-900" required />
+          <h3 className="text-2xl sm:text-3xl font-bold text-white text-center mb-6">Login</h3>
 
-          <div className="space-y-2">
-            <input name="address1" value={formData.address1} onChange={handleChange} placeholder="Address Line 1" className="w-full border p-2 rounded text-gray-900" required />
-            <input name="address2" value={formData.address2} onChange={handleChange} placeholder="Address Line 2" className="w-full border p-2 rounded text-gray-900" />
-            <div className="grid grid-cols-3 gap-2">
-              <input name="postcode" value={formData.postcode} onChange={handleChange} placeholder="Postcode" className="border p-2 rounded text-gray-900" required />
-              <input name="county" value={formData.county} onChange={handleChange} placeholder="County" className="border p-2 rounded text-gray-900" required />
-              <input name="country" value={formData.country} onChange={handleChange} placeholder="Country" className="border p-2 rounded text-gray-900" required />
-            </div>
-          </div>
+          <motion.form
+            onSubmit={handleLogin}
+            className="space-y-5"
+            noValidate
+            animate={message ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
+            transition={{ duration: 0.35 }}
+          >
+            <input
+              type="text"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoFocus
+              className="w-full px-5 py-4 text-lg sm:text-xl rounded-lg bg-white text-black placeholder-gray-500 focus:outline-none"
+            />
+            <input
+              id="password"
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-5 py-4 text-lg sm:text-xl rounded-lg bg-white text-black placeholder-gray-500 focus:outline-none"
+            />
 
-          <select name="role" value={formData.role} onChange={handleChange} className="w-full border p-2 rounded text-gray-900" required>
-            <option value="">Select Role</option>
-            {roles.map((role) => (
-              <option key={role} value={role}>{role}</option>
-            ))}
-          </select>
-
-          {(formData.role === 'Club Admin' || formData.role === 'Independent Coach') && (
-            <div className="space-y-2">
-              <input name="clubName" value={formData.clubName} onChange={handleChange} placeholder="Club Name" className="w-full border p-2 rounded text-gray-900" required />
-              <input name="clubAddress" value={formData.clubAddress} onChange={handleChange} placeholder="Club Address" className="w-full border p-2 rounded text-gray-900" required />
-              <input name="clubCity" value={formData.clubCity} onChange={handleChange} placeholder="Club City" className="w-full border p-2 rounded text-gray-900" required />
-            </div>
-          )}
-
-          {formData.role === 'Parents' && (
-            <div> <label htmlFor="selectedClub">Select Club</label> 
-            <select id="selectedClub" value={selectedClub} onChange={(e) => setSelectedClub(e.target.value)} className="w-full px-3 py-2 rounded border" required > 
-            <option value="">-- Select a Club --</option> {clubOptions.map((club) => ( <option key={club} value={club}> {club} </option> ))} 
-            </select>
-             </div> 
-             )}
-
-          
-
-          <div className="flex gap-4">
-            <button type="button" onClick={handleCancel} className="w-1/2 py-2 border rounded hover:bg-gray-100">Cancel</button>
-            <button type="submit" className="w-1/2 bg-blue-600 text-white py-2 rounded hover:bg-blue-700" disabled={isSubmitting}>
-              {isSubmitting ? 'Submitting...' : 'Submit'}
+            <button
+              type="submit"
+              className="w-full py-2 bg-yellow-400 hover:bg-yellow-300 rounded text-black font-bold text-lg disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Logging in...' : 'Login'}
             </button>
-          </div>
-        </form>
-        {message && <p className="mt-4 text-center text-sm font-medium text-gray-800">{message}</p>}
-      </div>
-    </div>
+
+            <p className="mt-6 text-sm text-white text-center">
+              Not a member?{' '}
+              <button
+                type="button"
+                onClick={() => setShowSignup(true)}
+                className="underline font-semibold"
+              >
+                Sign up now
+              </button>
+            </p>
+
+            {/* Big, accessible error */}
+            {message && (
+              <div role="alert" aria-live="assertive" className="mt-4">
+                <p className="flex items-center justify-center gap-2
+                               text-red-700 bg-red-50/90 border border-red-300
+                               rounded-xl px-4 py-3 shadow
+                               text-base sm:text-lg md:text-xl font-semibold tracking-wide">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className="w-5 h-5 md:w-6 md:h-6"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16Zm-.75-11a.75.75 0 011.5 0v5a.75.75 0 01-1.5 0V7Zm.75 8a1 1 0 100-2 1 1 0 000 2Z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {message}
+                </p>
+              </div>
+            )}
+          </motion.form>
+        </motion.div>
+      )}
+
+      {/* Signup overlay (from components/SignupOverlay) */}
+      <AnimatePresence>
+        {showSignup && (
+          <motion.div
+            key="signup"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50"
+          >
+            <SignupOverlay onClose={() => setShowSignup(false)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </main>
   );
 }

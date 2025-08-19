@@ -189,6 +189,11 @@ npm install canvas-confetti
 npx shadcn@latest add badge
 npm install @radix-ui/react-dialog
 npm install lodash.debounce
+npm i multer csv-parse validator
+
+# from backend/
+npm i multer
+npm i -D @types/multer
 
 
 npm install date-fns

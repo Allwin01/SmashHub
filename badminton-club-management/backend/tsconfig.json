@@ -7,6 +7,7 @@
     "esModuleInterop": true,
     "strict": true,
     "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "baseUrl": ".",
@@ -22,7 +23,8 @@
     "./**/*.ts",
     "./control/types/**/*",
     "./types",
-    "./server.ts"
+    "./server.ts", 
+     "./control/**/*.ts" 
   ],
   "exclude": ["node_modules"]
 }
